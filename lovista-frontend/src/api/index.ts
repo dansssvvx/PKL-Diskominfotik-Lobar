@@ -11,7 +11,7 @@ import type {
 } from '@/types'
 
 const api: AxiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL: 'http://127.0.0.1:8000/api',
   headers: { 'Content-Type': 'application/json' },
   timeout: 15000,
 })
@@ -29,7 +29,7 @@ api.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('lovista_token')
-      window.location.href = '/login'
+      // window.location.href = '/login'
     }
     return Promise.reject(err)
   }
@@ -38,13 +38,19 @@ api.interceptors.response.use(
 // ─── AUTH ────────────────────────────────────────────────────────────────────
 export const authApi = {
   login: (data: LoginForm) =>
-    api.post<{ access: string; refresh: string; user: User }>('/auth/login/', data),
+    api.post<{ access: string; refresh: string; user: User }>('/token/', data),
   register: (data: RegisterForm) =>
-    api.post<{ user: User; message: string }>('/auth/register/', data),
+    api.post<User>('/users/', data),
   refresh: (refresh: string) =>
-    api.post<{ access: string }>('/auth/token/refresh/', { refresh }),
-  me: () => api.get<User>('/auth/me/'),
-  logout: () => api.post('/auth/logout/'),
+    api.post<{ access: string }>('/token/refresh/', { refresh }),
+  me: () => api.get<User>('/users/me/'),
+  uploadPhoto: (file: File) => {
+    const fd = new FormData()
+    fd.append('profile_photo', file)
+    return api.post<{ profile_photo: string }>('/users/upload_photo/', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  }
 }
 
 // ─── DESTINATIONS ────────────────────────────────────────────────────────────
@@ -113,6 +119,7 @@ export const cultureApi = {
   create: (data: Partial<Culture>) => api.post<Culture>('/cultures/', data),
   update: (id: number, data: Partial<Culture>) =>
     api.patch<Culture>(`/cultures/${id}/`, data),
+  featured: () => api.get<Culture[]>('/cultures/featured/'),
 }
 
 // ─── CULINARY ────────────────────────────────────────────────────────────────
@@ -120,6 +127,7 @@ export const culinaryApi = {
   list: (params?: { search?: string; destination?: number; page?: number }) =>
     api.get<PaginatedResponse<Culinary>>('/culinaries/', { params }),
   detail: (id: number) => api.get<Culinary>(`/culinaries/${id}/`),
+  featured: () => api.get<Culinary[]>('/culinaries/featured/'),
 }
 
 // ─── BOOKINGS ────────────────────────────────────────────────────────────────

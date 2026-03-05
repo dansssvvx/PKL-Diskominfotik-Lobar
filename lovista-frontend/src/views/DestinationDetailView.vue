@@ -234,8 +234,6 @@
         <RouterLink to="/destinations" class="btn btn-primary" style="margin-top:16px">Back to Destinations</RouterLink>
       </div>
     </div>
-
-    <TheFooter />
   </div>
 </template>
 
@@ -246,7 +244,6 @@ import { useDestinationStore } from '@/stores/destination'
 import { useAuthStore } from '@/stores/auth'
 import { destinationApi } from '@/api'
 import TheNavbar from '@/components/layout/TheNavbar.vue'
-import TheFooter from '@/components/layout/TheFooter.vue'
 
 const route = useRoute()
 const router = useRouter()

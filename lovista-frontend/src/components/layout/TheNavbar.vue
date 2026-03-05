@@ -20,11 +20,43 @@
 
     <!-- Right side -->
     <div class="navbar__right">
-      <!-- Notification bell (logged in) -->
-      <button v-if="auth.isLoggedIn" class="navbar__icon-btn" @click="goNotifications">
-        <span class="navbar__notif-badge" v-if="unreadCount > 0">{{ unreadCount }}</span>
-        🔔
-      </button>
+      <!-- Notification bell -->
+      <div v-if="auth.isLoggedIn" class="navbar__notif-container">
+        <button class="navbar__icon-btn" @click.stop="toggleNotif">
+          <span class="navbar__notif-badge" v-if="unreadCount > 0">{{ unreadCount }}</span>
+          🔔
+        </button>
+
+        <!-- Notification Dropdown -->
+        <Transition name="fade">
+          <div class="navbar__notif-dropdown" v-if="notifOpen" v-click-outside="() => notifOpen = false">
+            <div class="notif-header">
+              <span>Notifications</span>
+              <button class="mark-read-btn" @click="markAllRead">Mark all read</button>
+            </div>
+            <div class="notif-list">
+              <div v-if="notifications.length === 0" class="notif-empty">
+                No notifications yet
+              </div>
+              <div 
+                v-for="notif in notifications" 
+                :key="notif.id" 
+                class="notif-item"
+                :class="{ 'notif-item--unread': !notif.is_read }"
+              >
+                <div class="notif-content">
+                  <div class="notif-title">{{ notif.title }}</div>
+                  <div class="notif-message">{{ notif.message }}</div>
+                  <div class="notif-time">{{ formatTime(notif.created_at) }}</div>
+                </div>
+              </div>
+            </div>
+            <RouterLink to="/profile" class="notif-footer" @click="notifOpen = false">
+              See all notifications
+            </RouterLink>
+          </div>
+        </Transition>
+      </div>
 
       <!-- Auth buttons -->
       <template v-if="!auth.isLoggedIn">
@@ -33,11 +65,15 @@
       </template>
 
       <!-- User menu -->
-      <div v-else class="navbar__user" @click="userMenuOpen = !userMenuOpen">
-        <div class="navbar__avatar">
-          {{ auth.user?.fullname.charAt(0).toUpperCase() }}
+      <div v-else class="navbar__user-wrapper">
+        <div class="navbar__user" @click.stop="toggleUserMenu">
+          <div class="navbar__avatar">
+            <img v-if="auth.user?.profile_photo" :src="getPhotoUrl(auth.user.profile_photo)" class="navbar__avatar-img" />
+            <span v-else>{{ auth.user?.fullname.charAt(0).toUpperCase() }}</span>
+          </div>
+          <span class="navbar__username hide-mobile">{{ auth.user?.fullname.split(' ')[0] }}</span>
+          <span class="navbar__chevron">▾</span>
         </div>
-        <span class="navbar__username hide-mobile">{{ auth.user?.fullname.split(' ')[0] }}</span>
 
         <!-- Dropdown -->
         <Transition name="fade">
@@ -45,7 +81,7 @@
             <div class="navbar__dropdown-header">
               <div class="navbar__dropdown-name">{{ auth.user?.fullname }}</div>
               <div class="navbar__dropdown-email">{{ auth.user?.email }}</div>
-              <span class="badge badge-blue">{{ auth.user?.role?.display_name }}</span>
+              <span class="badge badge-blue">{{ auth.user?.role?.display_name || 'Traveler' }}</span>
             </div>
             <div class="navbar__dropdown-divider"></div>
             <RouterLink to="/profile" class="navbar__dropdown-item" @click="userMenuOpen = false">
@@ -92,8 +128,10 @@ const route = useRoute()
 
 const isScrolled = ref(false)
 const userMenuOpen = ref(false)
+const notifOpen = ref(false)
 const logoError = ref(false)
 const unreadCount = ref(0)
+const notifications = ref<any[]>([])
 
 const navLinks = [
   { to: '/destinations', label: 'Destination' },
@@ -107,8 +145,44 @@ function isActive(path: string) {
   return route.path.startsWith(path)
 }
 
-function goNotifications() {
-  router.push('/profile#notifications')
+function toggleUserMenu() {
+  userMenuOpen.value = !userMenuOpen.value
+  if (userMenuOpen.value) notifOpen.value = false
+}
+
+const getPhotoUrl = (path: string) => {
+  if (!path) return ''
+  if (path.startsWith('http')) return path
+  return `http://127.0.0.1:8000${path}`
+}
+
+function toggleNotif() {
+  notifOpen.value = !notifOpen.value
+  if (notifOpen.value) {
+    fetchLatestNotifications()
+    userMenuOpen.value = false
+  }
+}
+
+async function fetchLatestNotifications() {
+  try {
+    const { data } = await notificationApi.list()
+    // Display only latest 5
+    notifications.value = data.results.slice(0, 5)
+  } catch { /* silent */ }
+}
+
+async function markAllRead() {
+  try {
+    await notificationApi.markAllRead()
+    unreadCount.value = 0
+    notifications.value = notifications.value.map(n => ({ ...n, is_read: true }))
+  } catch { /* silent */ }
+}
+
+function formatTime(dateString: string) {
+  const date = new Date(dateString)
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 async function handleLogout() {
@@ -136,7 +210,7 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll))
 
 <style scoped>
 .navbar {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px 40px;
   transition: background 0.4s, box-shadow 0.4s;
@@ -167,6 +241,45 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll))
 .navbar__link--active { background: #fff; color: #050608; font-weight: 700; }
 
 .navbar__right { display: flex; align-items: center; gap: 10px; }
+
+.navbar__notif-container { position: relative; }
+
+.navbar__notif-dropdown {
+  position: absolute; top: calc(100% + 15px); right: 0;
+  background: #111318; border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 16px; min-width: 320px;
+  box-shadow: 0 16px 50px rgba(0,0,0,0.7);
+  overflow: hidden; z-index: 200;
+}
+
+.notif-header {
+  padding: 16px; display: flex; justify-content: space-between;
+  align-items: center; border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.notif-header span { font-weight: 700; font-size: 0.95rem; }
+.mark-read-btn {
+  background: none; border: none; color: var(--blue);
+  font-size: 0.75rem; font-weight: 600; cursor: pointer;
+}
+
+.notif-list { max-height: 360px; overflow-y: auto; }
+.notif-item {
+  padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.2s;
+}
+.notif-item:hover { background: rgba(255,255,255,0.03); }
+.notif-item--unread { background: rgba(26,143,255,0.05); }
+.notif-title { font-weight: 600; font-size: 0.88rem; margin-bottom: 4px; color: #fff; }
+.notif-message { font-size: 0.82rem; color: rgba(255,255,255,0.5); line-height: 1.4; }
+.notif-time { font-size: 0.7rem; color: var(--blue); margin-top: 8px; font-weight: 600; }
+
+.notif-empty { padding: 40px 20px; text-align: center; color: rgba(255,255,255,0.3); font-size: 0.85rem; }
+.notif-footer {
+  display: block; padding: 14px; text-align: center;
+  background: rgba(255,255,255,0.03); font-size: 0.82rem;
+  font-weight: 600; color: rgba(255,255,255,0.5);
+}
+.notif-footer:hover { color: #fff; background: rgba(255,255,255,0.06); }
 
 .navbar__icon-btn {
   position: relative; width: 38px; height: 38px; border-radius: 50%;

@@ -7,11 +7,9 @@
       </h1>
       <p style="color:var(--w40)">This view is ready to be implemented — connect to Django API.</p>
     </div>
-    <TheFooter v-if="showNav" />
   </div>
 </template>
 <script setup lang="ts">
 import TheNavbar from '@/components/layout/TheNavbar.vue'
-import TheFooter from '@/components/layout/TheFooter.vue'
 const showNav = !['OperatorPackages','OperatorVehicles','OperatorHomestays','OperatorBookings','OperatorContributions','OperatorProfile','AdminDestinations','AdminUsers','AdminOperators','AdminContributions','AdminBookings','AdminActivityLogs','AdminSettings'].includes('OperatorVehicles')
 </script>
