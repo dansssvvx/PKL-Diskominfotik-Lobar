@@ -1,8 +1,10 @@
 <template>
   <div class="home-view">
+    <!-- Global Overlay for the whole page -->
+    <div class="home-global-overlay"></div>
+
     <!-- Hero Section -->
     <header class="hero">
-      <div class="hero__overlay"></div>
       <div class="container hero__container">
         <div class="hero__content slide-up-enter-active">
           <span class="hero__badge">EXPLORE WEST LOMBOK</span>
@@ -122,7 +124,8 @@
         </div>
 
         <div class="grid grid-3">
-          <div v-for="culture in cultures" :key="culture.id" class="culture-card">
+          <div v-for="culture in cultures" :key="culture.id" class="culture-card" :style="{ backgroundImage: `url(${getPhotoUrl(culture.images?.[0])})` }">
+            <div class="culture-card__overlay"></div>
             <div class="culture-card__content">
               <h3>{{ culture.name }}</h3>
               <p>{{ culture.description }}</p>
@@ -146,6 +149,9 @@
 
         <div class="grid grid-3">
           <div v-for="vehicle in vehicles" :key="vehicle.id" class="vehicle-card card">
+            <div class="vehicle-card__img-container">
+              <img :src="getPhotoUrl(vehicle.image)" :alt="vehicle.brand" class="vehicle-card__img" />
+            </div>
             <div class="vehicle-card__body">
               <div class="vehicle-card__type badge">{{ vehicle.type }}</div>
               <h3>{{ vehicle.brand }} {{ vehicle.model }}</h3>
@@ -214,41 +220,52 @@ onMounted(fetchData)
 </script>
 
 <style scoped>
+.home-view {
+  position: relative;
+  background-image: url('https://images.unsplash.com/photo-1516690561799-46d8f74f9abf?q=80&w=2070');
+  background-position: center;
+  background-size: cover;
+  background-attachment: scroll;
+  min-height: 100vh;
+}
+
+.home-global-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(to bottom, rgba(5,6,8,0.6) 0%, rgba(5,6,8,0.85) 20%, rgba(5,6,8,0.95) 100%);
+  z-index: 0;
+  pointer-events: none;
+}
+
 .hero {
   position: relative; 
   height: 100vh; 
   min-height: 750px;
-  background: var(--black);
-  /* Gambar representatif Lombok Barat (Pantai & Perbukitan) */
-  background-image: url('https://images.unsplash.com/photo-1516690561799-46d8f74f9abf?q=80&w=2070');
-  background-position: center;
-  background-size: cover;
-  background-attachment: scroll; /* Background ikut bergeser saat di-scroll */
   display: flex; 
   align-items: center; 
   padding-top: 80px;
   z-index: 1;
-}
-
-.hero__overlay {
-  position: absolute; inset: 0;
-  /* Overlay lebih gelap di bawah untuk transisi ke konten, dan gelap di kiri untuk teks */
-  background: linear-gradient(75deg, rgba(5,6,8,0.8) 0%, rgba(5,6,8,0.3) 50%, rgba(5,6,8,0.9) 100%);
+  background: transparent; /* Hilangkan background lokal */
 }
 
 .hero__container { position: relative; z-index: 2; }
-.hero__content { max-width: 700px; }
+.hero__content { max-width: 800px; }
 .hero__badge {
   display: inline-block; padding: 6px 16px; background: var(--w08);
   border: 1px solid var(--w12); border-radius: 99px;
   font-size: 0.75rem; font-weight: 700; letter-spacing: 2px; margin-bottom: 24px;
 }
-.hero__title { font-size: 4.5rem; line-height: 1.1; margin-bottom: 24px; }
-.hero__subtitle { font-size: 1.15rem; color: var(--w60); margin-bottom: 40px; line-height: 1.6; }
+.hero__title { font-size: 5rem; line-height: 1.1; margin-bottom: 24px; }
+.hero__subtitle { font-size: 1.25rem; color: var(--w60); margin-bottom: 40px; line-height: 1.6; }
 .hero__actions { display: flex; gap: 16px; }
 
-.section { padding: 100px 0; background: var(--black); }
-.bg-dark2 { background: var(--dark1); }
+.section { 
+  position: relative;
+  padding: 100px 0; 
+  background: transparent !important; /* Buat semua section transparan */
+  z-index: 1;
+}
+.bg-dark2 { background: transparent !important; }
 
 .section-header {
   display: flex; justify-content: space-between; align-items: flex-end;
@@ -293,13 +310,21 @@ onMounted(fetchData)
 
 /* Culture Card */
 .culture-card {
+  position: relative;
   height: 240px; border-radius: 16px; padding: 32px;
-  background: linear-gradient(45deg, var(--dark3), var(--dark4));
+  background-size: cover;
+  background-position: center;
   border: 1px solid var(--w08); display: flex; align-items: flex-end;
+  overflow: hidden;
 }
-.culture-card h3 { font-size: 1.5rem; margin-bottom: 8px; }
-.culture-card p { font-size: 0.88rem; color: var(--w60); margin-bottom: 16px; }
-.culture-card__loc { font-size: 0.75rem; color: var(--blue); font-weight: 700; letter-spacing: 1px; }
+.culture-card__overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(5,6,8,0.9) 0%, transparent 100%);
+}
+.culture-card__content { position: relative; z-index: 2; }
+
+.vehicle-card__img-container { height: 160px; overflow: hidden; }
+.vehicle-card__img { width: 100%; height: 100%; object-fit: cover; }
 
 .full-width { width: 100%; }
 .text-blue { color: var(--blue); }
