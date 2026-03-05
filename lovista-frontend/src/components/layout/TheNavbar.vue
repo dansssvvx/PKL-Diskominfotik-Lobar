@@ -1,7 +1,7 @@
 <template>
   <nav class="navbar" :class="{ 'navbar--solid': isScrolled }">
     <RouterLink to="/" class="navbar__logo">
-      <img src="/logo.svg" alt="Lombok Barat" class="navbar__logo-img" @error="logoError = true" v-if="!logoError" />
+      <img src="/Logo.png" alt="Lombok Barat" class="navbar__logo-img" @error="logoError = true" v-if="!logoError" />
       <span class="navbar__logo-fallback" v-else>🏛️</span>
     </RouterLink>
 
