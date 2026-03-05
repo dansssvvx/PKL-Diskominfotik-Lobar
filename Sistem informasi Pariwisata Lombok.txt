@@ -1,0 +1,5 @@
+Sistem informasi Pariwisata Lombok Barat berbasis website dengan Django, Vue.js, MySQL. 
+Jumlah aktor ada 3. yaitu user, operator dan admin. 
+user ini adalah pengguna biasa,
+operator ini adalah mitra kerja seperti diskominfotik Lombok barat, penyedia Rental, penyedia travel, penyedia homestay, dll.
+admin adalah admin pada umumnya.
