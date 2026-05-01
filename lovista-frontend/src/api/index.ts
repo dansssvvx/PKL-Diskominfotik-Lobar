@@ -69,10 +69,10 @@ export const destinationApi = {
   nearby: (lat: number, lng: number, radius = 10) =>
     api.get<TourismDestination[]>('/destinations/nearby/', { params: { lat, lng, radius } }),
   categories: () => api.get<DestinationCategory[]>('/destination-categories/'),
-  addReview: (destId: number, data: { rating: number; comment: string }) =>
-    api.post<Review>(`/destinations/${destId}/reviews/`, data),
-  toggleWishlist: (destId: number) =>
-    api.post<{ wishlisted: boolean }>(`/destinations/${destId}/wishlist/`),
+  addReview: (slug: string, data: { rating: number; comment: string }) =>
+    api.post<Review>(`/destinations/${slug}/reviews/`, data),
+  toggleWishlist: (slug: string) =>
+    api.post<{ wishlisted: boolean }>(`/destinations/${slug}/wishlist/`),
 }
 
 // ─── TOUR PACKAGES ──────────────────────────────────────────────────────────

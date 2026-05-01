@@ -1,3 +1,4 @@
+from django.db.models import Avg, Count
 from rest_framework import serializers
 from .models import (
     Role, User, DestinationCategory, TourismDestination, DestinationImage,
@@ -14,9 +15,10 @@ class RoleSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class UserSerializer(serializers.ModelSerializer):
+    role_name = serializers.ReadOnlyField(source='role.name')
     class Meta:
         model = User
-        fields = ('id', 'email', 'password', 'fullname', 'phone', 'role', 'profile_photo', 'is_verified', 'is_active', 'created_at')
+        fields = ('id', 'email', 'password', 'fullname', 'phone', 'role', 'role_name', 'profile_photo', 'is_verified', 'is_active', 'created_at')
         extra_kwargs = {
             'password': {'write_only': True},
             'role': {'required': False, 'allow_null': True},
@@ -33,14 +35,6 @@ class DestinationImageSerializer(serializers.ModelSerializer):
         model = DestinationImage
         fields = '__all__'
 
-class TourismDestinationSerializer(serializers.ModelSerializer):
-    category_name = serializers.ReadOnlyField(source='category.name')
-    images = DestinationImageSerializer(many=True, read_only=True)
-    
-    class Meta:
-        model = TourismDestination
-        fields = '__all__'
-
 class FacilitySerializer(serializers.ModelSerializer):
     class Meta:
         model = Facility
@@ -51,19 +45,64 @@ class CulinarySerializer(serializers.ModelSerializer):
         model = Culinary
         fields = '__all__'
 
+class ReviewSerializer(serializers.ModelSerializer):
+    user_details = UserSerializer(source='user', read_only=True)
+    class Meta:
+        model = Review
+        fields = '__all__'
+        extra_kwargs = {
+            'user': {'read_only': True},
+            'destination': {'read_only': True}
+        }
+
+class TourismDestinationSerializer(serializers.ModelSerializer):
+    category_name = serializers.ReadOnlyField(source='category.name')
+    images = DestinationImageSerializer(many=True, read_only=True)
+    reviews = ReviewSerializer(many=True, read_only=True)
+    culinaries = CulinarySerializer(many=True, read_only=True)
+    avg_rating = serializers.SerializerMethodField()
+    review_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = TourismDestination
+        fields = '__all__'
+
+    def get_avg_rating(self, obj):
+        result = obj.reviews.aggregate(Avg('rating'))['rating__avg']
+        return round(result, 1) if result is not None else 0
+
+    def get_review_count(self, obj):
+        return obj.reviews.count()
+
 class CultureSerializer(serializers.ModelSerializer):
     class Meta:
         model = Culture
         fields = '__all__'
 
-class ReviewSerializer(serializers.ModelSerializer):
-    user_name = serializers.ReadOnlyField(source='user.fullname')
+class PackageDestinationSerializer(serializers.ModelSerializer):
+    destination_name = serializers.ReadOnlyField(source='destination.name')
+    destination_slug = serializers.ReadOnlyField(source='destination.slug')
+    main_image = serializers.ReadOnlyField(source='destination.main_image')
     class Meta:
-        model = Review
+        model = PackageDestination
+        fields = '__all__'
+
+class PackageItinerarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PackageItinerary
+        fields = '__all__'
+
+class PackageInclusionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PackageInclusion
         fields = '__all__'
 
 class TourPackageSerializer(serializers.ModelSerializer):
     agency_name = serializers.ReadOnlyField(source='agency.business_name')
+    destinations = PackageDestinationSerializer(source='package_destinations', many=True, read_only=True)
+    itineraries = PackageItinerarySerializer(many=True, read_only=True)
+    inclusions = PackageInclusionSerializer(source='package_inclusions', many=True, read_only=True)
+    
     class Meta:
         model = TourPackage
         fields = '__all__'
@@ -98,4 +137,24 @@ class HomestayRoomSerializer(serializers.ModelSerializer):
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
+        fields = '__all__'
+
+class HomestayBookingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HomestayBooking
+        fields = '__all__'
+
+class VehicleRentalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VehicleRental
+        fields = '__all__'
+
+class AIRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AIRecommendation
+        fields = '__all__'
+
+class ContributionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Contribution
         fields = '__all__'

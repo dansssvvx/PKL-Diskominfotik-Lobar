@@ -72,6 +72,24 @@
               <p class="detail__desc">{{ dest.description }}</p>
             </div>
 
+            <!-- Local Culinary Section -->
+            <div class="detail__section" v-if="dest.culinaries?.length">
+              <h2 class="detail__section-title">Local Culinary</h2>
+              <div class="culinary__grid">
+                <div class="culinary-card" v-for="c in dest.culinaries" :key="c.id">
+                  <div class="culinary-card__img" :style="{ backgroundImage: `url(${getPhotoUrl(c.image)})` }"></div>
+                  <div class="culinary-card__content">
+                    <h3>{{ c.name }}</h3>
+                    <p class="culinary-card__desc">{{ c.description }}</p>
+                    <div class="culinary-card__meta">
+                      <span class="price-range">💰 {{ c.price_range }}</span>
+                      <span class="contact" v-if="c.contact">📞 {{ c.contact }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Location -->
             <div class="detail__section">
               <h2 class="detail__section-title">Location</h2>
@@ -82,9 +100,8 @@
                   <span>Lng: {{ dest.longitude }}</span>
                 </div>
               </div>
-              <div class="map-placeholder">
-                🗺️ Interactive Map — Leaflet.js integration point<br>
-                <small>center: [{{ dest.latitude }}, {{ dest.longitude }}]</small>
+              <div class="map-placeholder" id="map-container">
+                🗺️ Loading Interactive Map...
               </div>
             </div>
 
@@ -154,10 +171,15 @@
               <div v-if="dest.reviews?.length">
                 <div class="review-card" v-for="r in dest.reviews" :key="r.id">
                   <div class="review-card__header">
-                    <div class="review-card__avatar">{{ r.user?.fullname?.charAt(0) || '?' }}</div>
+                    <div v-if="r.user_details?.profile_photo" class="review-card__avatar-img" 
+                         :style="{ backgroundImage: `url(${r.user_details.profile_photo})` }">
+                    </div>
+                    <div v-else class="review-card__avatar">
+                      {{ r.user_details?.fullname?.charAt(0) || '?' }}
+                    </div>
                     <div>
-                      <div class="review-card__name">{{ r.user?.fullname }}</div>
-                      <div class="review-card__date">{{ formatDate(r.created_at) }}</div>
+                      <div class="review-card__name">{{ r.user_details?.fullname || 'Anonymous' }}</div>
+                      <div class="review-card__date">{{ formatDate(r.created_at) }} • {{ formatTime(r.created_at) }}</div>
                     </div>
                     <div class="review-card__stars">
                       <span v-for="s in r.rating" :key="s" style="color:#f59e0b">★</span>
@@ -194,11 +216,11 @@
                 <div class="booking-card__summary" v-if="bookingTotal > 0">
                   <div class="booking-card__summary-row">
                     <span>Ticket × {{ bookingPersons }}</span>
-                    <span>Rp {{ formatPrice(dest.ticket_price * bookingPersons) }}</span>
+                    <span>Rp {{ formatPrice(Number(dest.ticket_price) * Number(bookingPersons)) }}</span>
                   </div>
                   <div class="booking-card__summary-row">
                     <span>Parking</span>
-                    <span>Rp {{ formatPrice(dest.parking_fee) }}</span>
+                    <span>Rp {{ formatPrice(Number(dest.parking_fee)) }}</span>
                   </div>
                   <div class="divider"></div>
                   <div class="booking-card__summary-row booking-card__summary-total">
@@ -238,12 +260,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useDestinationStore } from '@/stores/destination'
 import { useAuthStore } from '@/stores/auth'
 import { destinationApi } from '@/api'
 import TheNavbar from '@/components/layout/TheNavbar.vue'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 
 const route = useRoute()
 const router = useRouter()
@@ -258,28 +282,88 @@ const bookingPersons = ref(1)
 const writeReview = ref(false)
 const reviewForm = ref({ rating: 5, comment: '' })
 
+let map: L.Map | null = null
+
+const initMap = () => {
+  if (!dest.value?.latitude || !dest.value?.longitude) return
+  
+  // Hapus map lama jika ada (untuk navigasi antar destinasi)
+  if (map) {
+    map.remove()
+  }
+
+  const lat = Number(dest.value.latitude)
+  const lng = Number(dest.value.longitude)
+
+  map = L.map('map-container').setView([lat, lng], 15)
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map)
+
+  // Custom icon karena Leaflet default sering bermasalah dengan path image di build tools
+  const customIcon = L.icon({
+    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41]
+  })
+
+  L.marker([lat, lng], { icon: customIcon })
+    .addTo(map)
+    .bindPopup(dest.value.name)
+    .openPopup()
+}
+
+// Watch perubahan data destinasi untuk update peta
+watch(() => dest.value, (newVal) => {
+  if (newVal) {
+    nextTick(() => initMap())
+  }
+})
+
 const bookingTotal = computed(() => {
   if (!dest.value || !bookingPersons.value) return 0
-  return dest.value.ticket_price * bookingPersons.value + dest.value.parking_fee
+  return (Number(dest.value.ticket_price) * Number(bookingPersons.value)) + Number(dest.value.parking_fee)
 })
 
 function formatPrice(val: number) { return val.toLocaleString('id-ID') }
 function formatDate(d: string) { return new Date(d).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }) }
+function formatTime(d: string) { return new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) }
 function scrollTo(id: string) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }) }
+
+const getPhotoUrl = (path?: string | null) => {
+  if (!path) return '/Logo.png'
+  if (path.startsWith('http')) return path
+  return `http://127.0.0.1:8000${path}`
+}
 
 async function toggleWishlist() {
   if (!auth.isLoggedIn) { router.push('/login'); return }
-  if (dest.value) await destStore.toggleWishlist(dest.value.id)
+  if (dest.value) await destStore.toggleWishlist(dest.value.slug)
 }
 
 async function submitReview() {
   if (!dest.value || !auth.isLoggedIn) return
   try {
-    await destinationApi.addReview(dest.value.id, reviewForm.value)
+    await destinationApi.addReview(dest.value.slug, reviewForm.value)
     writeReview.value = false
     reviewForm.value = { rating: 5, comment: '' }
+    // Refresh data to show new review and update average rating
     await destStore.fetchDetail(route.params.slug as string)
-  } catch { /* handle */ }
+    alert('Review submitted successfully!')
+  } catch (err: any) {
+    console.error('Failed to submit review:', err.response?.data || err.message)
+    const errorData = err.response?.data
+    let msg = 'Failed to submit review'
+    if (typeof errorData === 'string') msg = errorData
+    else if (errorData?.detail) msg = errorData.detail
+    else if (typeof errorData === 'object') {
+      // Handle validation errors like { rating: ["..."], comment: ["..."] }
+      msg = Object.values(errorData).flat().join('\n')
+    }
+    alert(msg)
+  }
 }
 
 function handleBooking() {
@@ -293,11 +377,19 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.detail-page { min-height: 100vh; }
+.detail-page { 
+  min-height: 100vh; 
+  background-color: #050608;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.08) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
+    radial-gradient(at 50% 50%, rgba(5, 6, 8, 1) 0px, transparent 80%);
+}
 .detail__hero { height: 60vh; min-height: 480px; position: relative; display: flex; align-items: flex-end; }
 .detail__hero-bg { position: absolute; inset: 0; background-size: cover; background-position: center; background-color: var(--dark3); }
-.detail__hero-overlay { position: absolute; inset: 0; background: linear-gradient(to bottom,rgba(5,6,8,.2) 0%,rgba(5,6,8,.85) 100%); }
+.detail__hero-overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 0%, rgba(5,6,8,0.95) 100%); }
 .detail__hero-content { position: relative; z-index: 2; padding-bottom: 48px; }
+/* ... breadcrumb and title unchanged ... */
 .detail__breadcrumb { font-size: .78rem; color: rgba(255,255,255,.5); margin-bottom: 12px; }
 .detail__breadcrumb a { color: rgba(255,255,255,.5); transition: color .2s; }
 .detail__breadcrumb a:hover { color: var(--blue-b); }
@@ -305,51 +397,102 @@ onMounted(() => {
 .detail__location { font-size: .9rem; color: rgba(255,255,255,.6); margin-bottom: 10px; }
 .detail__rating { display: flex; align-items: center; gap: 6px; margin-bottom: 20px; font-size: .9rem; }
 .detail__actions { display: flex; gap: 12px; }
-.detail__body { padding: 48px 0; }
+.detail__body { padding: 48px 0; position: relative; }
 .detail__layout { display: grid; grid-template-columns: 1fr 360px; gap: 48px; align-items: start; }
 .detail__section { margin-bottom: 40px; }
 .detail__section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.detail__section-title { font-family: 'Barlow Condensed', sans-serif; font-size: 1.4rem; font-weight: 700; font-style: italic; margin-bottom: 16px; }
+.detail__section-title { font-family: 'Barlow Condensed', sans-serif; font-size: 1.4rem; font-weight: 700; font-style: italic; margin-bottom: 16px; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
 .detail__desc { color: var(--w70); line-height: 1.8; font-size: .95rem; font-weight: 300; }
 .detail__info-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 40px; }
-.info-card { background: var(--dark2); border: 1px solid var(--w08); border-radius: 14px; padding: 16px; text-align: center; }
+.info-card { 
+  background: rgba(255, 255, 255, 0.03); 
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08); 
+  border-radius: 14px; padding: 16px; text-align: center; 
+  transition: transform 0.3s;
+}
+.info-card:hover { transform: translateY(-5px); border-color: rgba(37, 99, 235, 0.3); }
 .info-card__icon { font-size: 1.5rem; margin-bottom: 8px; }
 .info-card__label { font-size: .68rem; color: var(--w40); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 4px; }
 .info-card__value { font-weight: 700; font-size: .88rem; }
-.detail__location-box { background: var(--dark2); border: 1px solid var(--w08); border-radius: 12px; padding: 16px; margin-bottom: 16px; font-size: .88rem; color: var(--w70); display: flex; justify-content: space-between; align-items: center; }
+.detail__location-box { 
+  background: rgba(255, 255, 255, 0.02); 
+  border: 1px solid rgba(255, 255, 255, 0.05); 
+  border-radius: 12px; padding: 16px; margin-bottom: 16px; 
+  font-size: .88rem; color: var(--w70); display: flex; justify-content: space-between; align-items: center; 
+}
 .detail__coords { display: flex; gap: 16px; font-family: monospace; font-size: .78rem; color: var(--w40); }
-.map-placeholder { background: var(--dark2); border: 1px solid var(--w08); border-radius: 14px; height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--w40); font-size: .9rem; text-align: center; gap: 8px; }
+.map-placeholder { 
+  background: #000; border: 1px solid var(--w08); border-radius: 14px; 
+  height: 320px; width: 100%; overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
 .facilities__grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
-.facility-item { background: var(--dark2); border: 1px solid var(--w08); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 8px; font-size: .85rem; }
+.facility-item { 
+  background: rgba(255, 255, 255, 0.03); 
+  border: 1px solid rgba(255, 255, 255, 0.05); 
+  border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 8px; font-size: .85rem; 
+}
 .facility-item--unavailable { opacity: .4; }
 .gallery__grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
-.gallery-item { aspect-ratio: 4/3; border-radius: 12px; background-size: cover; background-position: center; background-color: var(--dark3); cursor: pointer; transition: transform .3s; }
-.gallery-item:hover { transform: scale(1.03); }
+.gallery-item { aspect-ratio: 4/3; border-radius: 12px; background-size: cover; background-position: center; background-color: var(--dark3); cursor: pointer; transition: transform .3s, box-shadow 0.3s; }
+.gallery-item:hover { transform: scale(1.03); box-shadow: 0 10px 20px rgba(0,0,0,0.4); }
+
+/* Culinary Styles */
+.culinary__grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 10px; }
+.culinary-card { 
+  display: flex; gap: 16px; background: rgba(255,255,255,0.03); 
+  border: 1px solid rgba(255,255,255,0.05); border-radius: 14px; padding: 12px; 
+  transition: transform 0.3s;
+}
+.culinary-card:hover { transform: translateY(-5px); border-color: rgba(37, 99, 235, 0.2); }
+.culinary-card__img { width: 100px; height: 100px; border-radius: 10px; flex-shrink: 0; background-size: cover; background-position: center; }
+.culinary-card__content { flex: 1; min-width: 0; }
+.culinary-card__content h3 { font-size: 1rem; margin-bottom: 6px; color: #fff; }
+.culinary-card__desc { font-size: 0.82rem; color: var(--w60); line-height: 1.4; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.culinary-card__meta { display: flex; gap: 12px; font-size: 0.75rem; color: var(--w40); }
+
 .rating-select { display: flex; gap: 4px; }
 .rating-star { font-size: 1.8rem; color: rgba(255,255,255,.2); cursor: pointer; transition: color .2s; }
 .rating-star.active { color: #f59e0b; }
-.review-form { padding: 20px; margin-bottom: 20px; }
-.review-card { background: var(--dark2); border: 1px solid var(--w08); border-radius: 14px; padding: 18px; margin-bottom: 14px; }
+.review-form { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 20px; margin-bottom: 20px; }
+.review-card { 
+  background: rgba(255, 255, 255, 0.02); 
+  border: 1px solid rgba(255, 255, 255, 0.05); 
+  border-radius: 14px; padding: 18px; margin-bottom: 14px; 
+}
 .review-card__header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .review-card__avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--blue); display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
-.review-card__name { font-weight: 700; font-size: .9rem; }
+.review-card__avatar-img { width: 38px; height: 38px; border-radius: 50%; background-size: cover; background-position: center; background-color: var(--dark3); flex-shrink: 0; border: 1px solid var(--w08); }
+.review-card__name { font-weight: 700; font-size: .9rem; color: #fff; }
 .review-card__date { font-size: .72rem; color: var(--w40); }
 .review-card__stars { margin-left: auto; }
 .review-card__text { font-size: .88rem; color: var(--w70); line-height: 1.6; }
-.booking-card { overflow: hidden; position: sticky; top: 100px; }
-.booking-card__header { padding: 20px; background: var(--blue); }
-.booking-card__price { font-family: 'Bebas Neue', sans-serif; font-size: 2rem; letter-spacing: 1px; }
-.booking-card__price-sub { font-size: .78rem; opacity: .8; }
+.booking-card { 
+  overflow: hidden; position: sticky; top: 100px; 
+  background: rgba(10, 11, 14, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+}
+.booking-card__header { padding: 20px; background: linear-gradient(135deg, var(--blue) 0%, #1e40af 100%); }
+.booking-card__price { font-family: 'Bebas Neue', sans-serif; font-size: 2rem; letter-spacing: 1px; color: #fff; }
+.booking-card__price-sub { font-size: .78rem; opacity: .8; color: #fff; }
 .booking-card__body { padding: 20px; display: flex; flex-direction: column; gap: 0; }
-.booking-card__summary { background: var(--dark3); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+.booking-card__summary { background: rgba(255,255,255,0.03); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
 .booking-card__summary-row { display: flex; justify-content: space-between; font-size: .85rem; margin-bottom: 6px; color: var(--w70); }
 .booking-card__summary-total { color: var(--white); font-size: .95rem; }
-.contact-card { padding: 18px; margin-top: 14px; }
-.contact-card__title { font-weight: 700; margin-bottom: 12px; }
+.contact-card { 
+  background: rgba(255, 255, 255, 0.02); 
+  border: 1px solid rgba(255, 255, 255, 0.05); 
+  padding: 18px; margin-top: 14px; 
+}
+.contact-card__title { font-weight: 700; margin-bottom: 12px; color: #fff; }
 .contact-card__item { font-size: .85rem; color: var(--w70); margin-bottom: 8px; }
 @media (max-width: 900px) {
   .detail__layout { grid-template-columns: 1fr; }
   .detail__info-grid { grid-template-columns: repeat(2,1fr); }
+  .culinary__grid { grid-template-columns: 1fr; }
   .detail__sidebar { position: static; }
 }
 </style>

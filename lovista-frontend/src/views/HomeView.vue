@@ -43,7 +43,7 @@
               <h3 class="card-modern__title">{{ dest.name }}</h3>
               <div class="card-modern__info">
                 <span>📍 {{ dest.district }}</span>
-                <span>⭐ 4.8</span>
+                <span>⭐ {{ dest.avg_rating || 0 }}</span>
               </div>
               <div class="card-modern__footer">
                 <span class="card-modern__price">Rp {{ formatNumber(dest.ticket_price) }}</span>
@@ -124,11 +124,10 @@
         </div>
 
         <div class="grid grid-3">
-          <div v-for="culture in cultures" :key="culture.id" class="culture-card" :style="{ backgroundImage: `url(${getPhotoUrl(culture.images?.[0])})` }">
+          <div v-for="culture in cultures" :key="culture.id" class="culture-card" :style="{ backgroundImage: `url(${getCultureImage(culture)})` }">
             <div class="culture-card__overlay"></div>
             <div class="culture-card__content">
               <h3>{{ culture.name }}</h3>
-              <p>{{ culture.description }}</p>
               <div class="culture-card__loc">📍 {{ culture.location }}</div>
             </div>
           </div>
@@ -187,22 +186,68 @@ const cultures = ref<Culture[]>([])
 const vehicles = ref<Vehicle[]>([])
 
 async function fetchData() {
-  try {
-    const [destRes, pkgRes, culRes, cultRes, vehRes] = await Promise.all([
-      destinationApi.popular(),
-      packageApi.featured(),
-      culinaryApi.featured(),
-      cultureApi.featured(),
-      vehicleApi.list({ page: 1 })
-    ])
-    
-    popularDestinations.value = destRes.data
-    featuredPackages.value = pkgRes.data
-    culinaries.value = culRes.data
-    cultures.value = cultRes.data
-    vehicles.value = vehRes.data.results.slice(0, 3)
-  } catch (err) {
-    console.error('Failed to fetch home data:', err)
+  console.log('Fetching home data...')
+  
+  const results = await Promise.allSettled([
+    destinationApi.popular(),
+    packageApi.featured(),
+    culinaryApi.featured(),
+    cultureApi.featured(),
+    vehicleApi.list({ page: 1 })
+  ])
+
+  // Process Popular Destinations
+  if (results[0].status === 'fulfilled') {
+    const res = results[0].value
+    popularDestinations.value = Array.isArray(res.data) ? res.data : (res.data as any).results || []
+    console.log('Popular destinations loaded:', popularDestinations.value.length)
+  } else {
+    console.error('Failed to fetch popular destinations')
+    // Fallback
+    try {
+      const res = await destinationApi.list({ page_size: 5 })
+      popularDestinations.value = res.data.results
+    } catch {}
+  }
+
+  // Process Featured Packages
+  if (results[1].status === 'fulfilled') {
+    const res = results[1].value
+    const data = Array.isArray(res.data) ? res.data : (res.data as any).results || []
+    if (data.length > 0) {
+      featuredPackages.value = data
+    } else {
+      console.log('No featured packages found, using fallback')
+      const listRes = await packageApi.list({ page: 1 })
+      featuredPackages.value = listRes.data.results.slice(0, 4)
+    }
+    console.log('Featured packages loaded:', featuredPackages.value.length)
+  } else {
+    console.error('Failed to fetch featured packages')
+    try {
+      const listRes = await packageApi.list({ page: 1 })
+      featuredPackages.value = listRes.data.results.slice(0, 4)
+    } catch {}
+  }
+
+  // Process Culinaries
+  if (results[2].status === 'fulfilled') {
+    const res = results[2].value
+    culinaries.value = Array.isArray(res.data) ? res.data : (res.data as any).results || []
+  }
+
+  // Process Cultures
+  if (results[3].status === 'fulfilled') {
+    const res = results[3].value
+    cultures.value = Array.isArray(res.data) ? res.data : (res.data as any).results || []
+  }
+
+  // Process Vehicles
+  if (results[4].status === 'fulfilled') {
+    const res = results[4].value
+    if (res.data && res.data.results) {
+      vehicles.value = res.data.results.slice(0, 3)
+    }
   }
 }
 
@@ -210,6 +255,33 @@ const getPhotoUrl = (path?: string) => {
   if (!path) return '/Logo.png' // Fallback
   if (path.startsWith('http')) return path
   return `http://127.0.0.1:8000${path}`
+}
+
+const getCultureImage = (culture: any) => {
+  if (!culture.images) return '/Logo.png'
+  
+  let imgList: any[] = []
+
+  // Handle {"Images": ["..."]} format
+  if (culture.images.Images && Array.isArray(culture.images.Images)) {
+    imgList = culture.images.Images
+  } 
+  // Handle {"images": ["..."]} format
+  else if (culture.images.images && Array.isArray(culture.images.images)) {
+    imgList = culture.images.images
+  }
+  // Handle direct array format [...]
+  else if (Array.isArray(culture.images)) {
+    imgList = culture.images
+  }
+
+  if (imgList.length === 0) return '/Logo.png'
+  
+  const firstImage = imgList[0]
+  if (typeof firstImage === 'string') {
+    return getPhotoUrl(firstImage)
+  }
+  return getPhotoUrl(firstImage.image || firstImage.image_url || '/Logo.png')
 }
 
 const formatNumber = (num: number | string) => {
@@ -222,7 +294,7 @@ onMounted(fetchData)
 <style scoped>
 .home-view {
   position: relative;
-  background-image: url('https://images.unsplash.com/photo-1516690561799-46d8f74f9abf?q=80&w=2070');
+  background-image: url('https://images.unsplash.com/photo-1648701883673-a0c8280e527d?q=80&w=2127&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D');
   background-position: center;
   background-size: cover;
   background-attachment: scroll;
@@ -232,7 +304,7 @@ onMounted(fetchData)
 .home-global-overlay {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: linear-gradient(to bottom, rgba(5,6,8,0.6) 0%, rgba(5,6,8,0.85) 20%, rgba(5,6,8,0.95) 100%);
+  background: linear-gradient(to bottom, rgba(5,6,8,0.6) 0%, rgba(5,6,8,0.85) 50%, rgba(5,6,8,0.95) 100%);
   z-index: 0;
   pointer-events: none;
 }
