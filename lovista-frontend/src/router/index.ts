@@ -40,16 +40,34 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Culture & Heritage — LoVista' }
   },
   {
+    path: '/culture/:id',
+    component: () => import('@/views/CultureDetailView.vue'),
+    name: 'culture-detail',
+    meta: { title: 'Culture Detail — LoVista' }
+  },
+  {
     path: '/culinaries',
     component: () => import('@/views/CulinaryView.vue'),
     name: 'culinaries',
     meta: { title: 'Local Culinaries — LoVista' }
   },
   {
+    path: '/culinaries/:id',
+    component: () => import('@/views/CulinaryDetailView.vue'),
+    name: 'culinary-detail',
+    meta: { title: 'Culinary Detail — LoVista' }
+  },
+  {
     path: '/rent',
     component: () => import('@/views/RentView.vue'),
     name: 'rent',
     meta: { title: 'Vehicle Rental — LoVista' }
+  },
+  {
+    path: '/rent/:id',
+    component: () => import('@/views/VehicleDetailView.vue'),
+    name: 'vehicle-detail',
+    meta: { title: 'Vehicle Detail — LoVista' }
   },
   {
     path: '/homestays',

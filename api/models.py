@@ -145,7 +145,7 @@ class Culinary(models.Model):
     description = models.TextField(null=True, blank=True)
     price_range = models.CharField(max_length=50, null=True, blank=True)
     contact = models.CharField(max_length=255, null=True, blank=True)
-    image = models.CharField(max_length=255, null=True, blank=True)
+    images = models.JSONField(null=True, blank=True)
     latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
     longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
     is_standalone = models.BooleanField(default=False)

@@ -198,6 +198,8 @@ export const adminApi = {
 
 // ─── AGENCY / OPERATOR ───────────────────────────────────────────────────────
 export const agencyApi = {
+  list: (params?: { page?: number }) => api.get<PaginatedResponse<TravelAgency>>('/agencies/', { params }),
+  detail: (id: number) => api.get<TravelAgency>(`/agencies/${id}/`),
   me: () => api.get<TravelAgency>('/agencies/me/'),
   update: (data: Partial<TravelAgency>) => api.patch<TravelAgency>('/agencies/me/', data),
   bookings: (params?: { status?: string; page?: number }) =>

@@ -107,7 +107,7 @@ export interface Culinary {
   description: string | null
   price_range: string | null
   contact: string | null
-  image: string | null
+  images: string[] | null
   latitude: number | null
   longitude: number | null
   is_standalone: boolean

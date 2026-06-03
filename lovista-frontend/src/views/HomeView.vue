@@ -23,7 +23,7 @@
     </header>
 
     <!-- Popular Destinations Section -->
-    <section class="section">
+    <section class="section" style="padding-top: 0px;">
       <div class="container">
         <div class="section-header">
           <div>
@@ -99,15 +99,20 @@
         </div>
 
         <div class="grid grid-4">
-          <div v-for="item in culinaries" :key="item.id" class="card-simple">
+          <RouterLink 
+            v-for="item in culinaries" 
+            :key="item.id" 
+            :to="'/culinaries/' + item.id"
+            class="card-simple"
+          >
             <div class="card-simple__img-box">
-              <img :src="getPhotoUrl(item.image)" :alt="item.name" />
+              <img :src="getCulinaryImage(item)" :alt="item.name" />
             </div>
             <div class="card-simple__body">
               <h4>{{ item.name }}</h4>
               <p>{{ item.price_range }}</p>
             </div>
-          </div>
+          </RouterLink>
         </div>
       </div>
     </section>
@@ -124,13 +129,19 @@
         </div>
 
         <div class="grid grid-3">
-          <div v-for="culture in cultures" :key="culture.id" class="culture-card" :style="{ backgroundImage: `url(${getCultureImage(culture)})` }">
+          <RouterLink 
+            v-for="culture in cultures" 
+            :key="culture.id" 
+            :to="'/culture/' + culture.id" 
+            class="culture-card" 
+            :style="{ backgroundImage: `url('${getCultureImage(culture)}')` }"
+          >
             <div class="culture-card__overlay"></div>
             <div class="culture-card__content">
               <h3>{{ culture.name }}</h3>
               <div class="culture-card__loc">📍 {{ culture.location }}</div>
             </div>
-          </div>
+          </RouterLink>
         </div>
       </div>
     </section>
@@ -159,8 +170,8 @@
                 <span class="price">Rp {{ formatNumber(vehicle.daily_rate) }}</span>
                 <span class="unit">/ day</span>
               </div>
-              <button class="btn btn-blue-outline full-width mt-4">Check Availability</button>
-            </div>
+              <RouterLink :to="'/rent/' + vehicle.id" class="btn btn-blue-outline full-width mt-4">Check Availability</RouterLink>
+              </div>
           </div>
         </div>
       </div>
@@ -245,9 +256,8 @@ async function fetchData() {
   // Process Vehicles
   if (results[4].status === 'fulfilled') {
     const res = results[4].value
-    if (res.data && res.data.results) {
-      vehicles.value = res.data.results.slice(0, 3)
-    }
+    const data = Array.isArray(res.data) ? res.data : (res.data as any).results || []
+    vehicles.value = data.slice(0, 3)
   }
 }
 
@@ -257,17 +267,53 @@ const getPhotoUrl = (path?: string) => {
   return `http://127.0.0.1:8000${path}`
 }
 
+const getCulinaryImage = (item: any) => {
+  if (!item.images) return '/Logo.png'
+  
+  if (typeof item.images === 'string') {
+    try {
+      const parsed = JSON.parse(item.images);
+      if (Array.isArray(parsed) && parsed.length > 0) return getPhotoUrl(parsed[0]);
+      return getPhotoUrl(item.images);
+    } catch {
+      return getPhotoUrl(item.images);
+    }
+  }
+
+  if (Array.isArray(item.images) && item.images.length > 0) {
+    return getPhotoUrl(item.images[0]);
+  }
+  return '/Logo.png'
+}
+
 const getCultureImage = (culture: any) => {
   if (!culture.images) return '/Logo.png'
   
+  // If images is a single string (URL or JSON encoded string)
+  if (typeof culture.images === 'string') {
+    try {
+      const parsed = JSON.parse(culture.images);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return getPhotoUrl(parsed[0]);
+      } else if (parsed && typeof parsed === 'object') {
+        culture.images = parsed;
+      } else {
+        return getPhotoUrl(culture.images);
+      }
+    } catch {
+      // It's just a plain string (URL)
+      return getPhotoUrl(culture.images);
+    }
+  }
+
   let imgList: any[] = []
 
   // Handle {"Images": ["..."]} format
-  if (culture.images.Images && Array.isArray(culture.images.Images)) {
+  if (culture.images && culture.images.Images && Array.isArray(culture.images.Images)) {
     imgList = culture.images.Images
   } 
   // Handle {"images": ["..."]} format
-  else if (culture.images.images && Array.isArray(culture.images.images)) {
+  else if (culture.images && culture.images.images && Array.isArray(culture.images.images)) {
     imgList = culture.images.images
   }
   // Handle direct array format [...]
@@ -275,7 +321,10 @@ const getCultureImage = (culture: any) => {
     imgList = culture.images
   }
 
-  if (imgList.length === 0) return '/Logo.png'
+  if (imgList.length === 0) {
+    if (typeof culture.images === 'string') return getPhotoUrl(culture.images)
+    return '/Logo.png'
+  }
   
   const firstImage = imgList[0]
   if (typeof firstImage === 'string') {
@@ -374,10 +423,20 @@ onMounted(fetchData)
 .card-modern__desc { font-size: 0.85rem; color: var(--w40); line-height: 1.5; margin-bottom: 20px; }
 
 /* Simple Card for Culinary */
-.card-simple { display: flex; align-items: center; gap: 16px; background: var(--dark2); padding: 12px; border-radius: 12px; border: 1px solid var(--w08); }
+.card-simple { 
+  display: flex; align-items: center; gap: 16px; 
+  background: var(--dark2); padding: 12px; 
+  border-radius: 12px; border: 1px solid var(--w08); 
+  text-decoration: none; color: inherit;
+  transition: transform 0.3s, border-color 0.3s;
+}
+.card-simple:hover {
+  transform: translateY(-10px);
+  border-color: var(--blue);
+}
 .card-simple__img-box { width: 70px; height: 70px; border-radius: 8px; overflow: hidden; }
 .card-simple__img-box img { width: 100%; height: 100%; object-fit: cover; }
-.card-simple__body h4 { font-size: 0.95rem; margin-bottom: 4px; }
+.card-simple__body h4 { font-size: 0.95rem; margin-bottom: 4px; color: var(--white); }
 .card-simple__body p { font-size: 0.8rem; color: var(--blue); font-weight: 600; }
 
 /* Culture Card */
@@ -388,6 +447,12 @@ onMounted(fetchData)
   background-position: center;
   border: 1px solid var(--w08); display: flex; align-items: flex-end;
   overflow: hidden;
+  transition: transform 0.3s, border-color 0.3s;
+  text-decoration: none;
+}
+.culture-card:hover {
+  transform: translateY(-10px);
+  border-color: var(--blue);
 }
 .culture-card__overlay {
   position: absolute; inset: 0;
@@ -395,8 +460,19 @@ onMounted(fetchData)
 }
 .culture-card__content { position: relative; z-index: 2; }
 
+/* Vehicle Card */
+.vehicle-card {
+  background: var(--dark2); border-radius: 16px; overflow: hidden;
+  border: 1px solid var(--w08); transition: transform 0.3s, border-color 0.3s;
+}
+.vehicle-card:hover { transform: translateY(-10px); border-color: var(--blue); }
 .vehicle-card__img-container { height: 160px; overflow: hidden; }
 .vehicle-card__img { width: 100%; height: 100%; object-fit: cover; }
+.vehicle-card__body { padding: 20px; }
+.vehicle-card__type { margin-bottom: 8px; }
+.vehicle-card__price { margin-top: 16px; display: flex; align-items: baseline; gap: 4px; }
+.vehicle-card__price .price { font-weight: 700; color: #fff; font-size: 1.1rem; }
+.vehicle-card__price .unit { font-size: 0.8rem; color: var(--w40); }
 
 .full-width { width: 100%; }
 .text-blue { color: var(--blue); }
