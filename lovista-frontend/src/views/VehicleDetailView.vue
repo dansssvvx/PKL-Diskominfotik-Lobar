@@ -155,6 +155,7 @@
 </template>
 
 <script setup lang="ts">
+import Swal from 'sweetalert2'
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { vehicleApi, agencyApi } from '@/api'
@@ -204,7 +205,7 @@ const totalEstimate = computed(() => {
 })
 
 const handleBooking = () => {
-  alert(`Booking initiated for ${vehicle.value?.brand} ${vehicle.value?.model}!\nTotal: Rp ${formatNumber(totalEstimate.value)}`)
+  Swal.fire({ title: 'Notification', text: `Booking initiated for ${vehicle.value?.brand} ${vehicle.value?.model}!\nTotal: Rp ${formatNumber(totalEstimate.value)}`, icon: 'info' })
 }
 
 onMounted(async () => {

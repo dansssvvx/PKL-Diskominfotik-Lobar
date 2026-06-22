@@ -260,6 +260,7 @@
 </template>
 
 <script setup lang="ts">
+import Swal from 'sweetalert2'
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useDestinationStore } from '@/stores/destination'
@@ -351,7 +352,7 @@ async function submitReview() {
     reviewForm.value = { rating: 5, comment: '' }
     // Refresh data to show new review and update average rating
     await destStore.fetchDetail(route.params.slug as string)
-    alert('Review submitted successfully!')
+    Swal.fire({ title: 'Notification', text: 'Review submitted successfully!', icon: 'info' })
   } catch (err: any) {
     console.error('Failed to submit review:', err.response?.data || err.message)
     const errorData = err.response?.data
@@ -362,13 +363,13 @@ async function submitReview() {
       // Handle validation errors like { rating: ["..."], comment: ["..."] }
       msg = Object.values(errorData).flat().join('\n')
     }
-    alert(msg)
+    Swal.fire({ title: 'Notification', text: msg, icon: 'info' })
   }
 }
 
 function handleBooking() {
   if (!auth.isLoggedIn) { router.push('/login'); return }
-  if (!bookingDate.value) { alert('Please select a date'); return }
+  if (!bookingDate.value) { Swal.fire({ title: 'Notification', text: 'Please select a date', icon: 'info' }); return }
 }
 
 onMounted(() => {

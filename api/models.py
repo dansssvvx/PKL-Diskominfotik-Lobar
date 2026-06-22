@@ -212,8 +212,11 @@ class TravelAgency(models.Model):
     description = models.TextField(null=True, blank=True)
     bank_account = models.JSONField(null=True, blank=True)
     is_verified = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.business_name
 
     class Meta:
         db_table = 'travel_agencies'

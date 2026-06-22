@@ -14,11 +14,19 @@ class RoleSerializer(serializers.ModelSerializer):
         model = Role
         fields = '__all__'
 
+class TravelAgencySerializer(serializers.ModelSerializer):
+    package_count = serializers.IntegerField(source='packages.count', read_only=True)
+    vehicle_count = serializers.IntegerField(source='vehicles.count', read_only=True)
+    class Meta:
+        model = TravelAgency
+        fields = '__all__'
+
 class UserSerializer(serializers.ModelSerializer):
     role_name = serializers.ReadOnlyField(source='role.name')
+    agency_profile = TravelAgencySerializer(source='travelagency', read_only=True)
     class Meta:
         model = User
-        fields = ('id', 'email', 'password', 'fullname', 'phone', 'role', 'role_name', 'profile_photo', 'is_verified', 'is_active', 'created_at')
+        fields = ('id', 'email', 'password', 'fullname', 'phone', 'role', 'role_name', 'profile_photo', 'is_verified', 'is_active', 'created_at', 'agency_profile')
         extra_kwargs = {
             'password': {'write_only': True},
             'role': {'required': False, 'allow_null': True},
@@ -110,26 +118,26 @@ class TourPackageSerializer(serializers.ModelSerializer):
 class BookingSerializer(serializers.ModelSerializer):
     package_name = serializers.ReadOnlyField(source='package.name')
     user_name = serializers.ReadOnlyField(source='user.fullname')
+    user_email = serializers.ReadOnlyField(source='user.email')
+    agency_name = serializers.ReadOnlyField(source='package.agency.business_name')
     class Meta:
         model = Booking
         fields = '__all__'
 
-class TravelAgencySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TravelAgency
-        fields = '__all__'
-
 class VehicleSerializer(serializers.ModelSerializer):
+    agency_name = serializers.ReadOnlyField(source='agency.business_name')
     class Meta:
         model = Vehicle
         fields = '__all__'
 
 class HomestaySerializer(serializers.ModelSerializer):
+    owner_name = serializers.ReadOnlyField(source='owner.fullname')
     class Meta:
         model = Homestay
         fields = '__all__'
 
 class HomestayRoomSerializer(serializers.ModelSerializer):
+    homestay_name = serializers.ReadOnlyField(source='homestay.name')
     class Meta:
         model = HomestayRoom
         fields = '__all__'
@@ -139,12 +147,25 @@ class NotificationSerializer(serializers.ModelSerializer):
         model = Notification
         fields = '__all__'
 
+class ActivityLogSerializer(serializers.ModelSerializer):
+    user_fullname = serializers.ReadOnlyField(source='user.fullname')
+    class Meta:
+        model = ActivityLog
+        fields = '__all__'
+
 class HomestayBookingSerializer(serializers.ModelSerializer):
+    room_name = serializers.ReadOnlyField(source='room.room_type')
+    homestay_name = serializers.ReadOnlyField(source='room.homestay.name')
+    user_name = serializers.ReadOnlyField(source='user.fullname')
     class Meta:
         model = HomestayBooking
         fields = '__all__'
 
 class VehicleRentalSerializer(serializers.ModelSerializer):
+    vehicle_name = serializers.ReadOnlyField(source='vehicle.model')
+    vehicle_brand = serializers.ReadOnlyField(source='vehicle.brand')
+    agency_name = serializers.ReadOnlyField(source='vehicle.agency.business_name')
+    user_name = serializers.ReadOnlyField(source='user.fullname')
     class Meta:
         model = VehicleRental
         fields = '__all__'
@@ -157,4 +178,9 @@ class AIRecommendationSerializer(serializers.ModelSerializer):
 class ContributionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contribution
+        fields = '__all__'
+
+class SettingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Setting
         fields = '__all__'

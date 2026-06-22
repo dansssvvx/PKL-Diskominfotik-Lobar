@@ -188,6 +188,30 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Manage Destinations — LoVista' }
       },
       {
+        path: 'packages',
+        component: () => import('@/views/admin/AdminPackages.vue'),
+        name: 'admin-packages',
+        meta: { title: 'Manage Packages — LoVista' }
+      },
+      {
+        path: 'culture',
+        component: () => import('@/views/admin/AdminCulture.vue'),
+        name: 'admin-culture',
+        meta: { title: 'Manage Culture — LoVista' }
+      },
+      {
+        path: 'culinary',
+        component: () => import('@/views/admin/AdminCulinary.vue'),
+        name: 'admin-culinary',
+        meta: { title: 'Manage Culinary — LoVista' }
+      },
+      {
+        path: 'vehicle-rentals',
+        component: () => import('@/views/admin/AdminRent.vue'),
+        name: 'admin-rent',
+        meta: { title: 'Manage Vehicle Rentals — LoVista' }
+      },
+      {
         path: 'users',
         component: () => import('@/views/admin/AdminUsers.vue'),
         name: 'admin-users',

@@ -136,6 +136,7 @@ const notifications = ref<any[]>([])
 const navLinks = [
   { to: '/destinations', label: 'Destination' },
   { to: '/packages', label: 'Tour Package' },
+  { to: '/homestays', label: 'Homestay' },
   { to: '/culture', label: 'Culture' },
   { to: '/culinaries', label: 'Culinaries' },
   { to: '/rent', label: 'Rent' },
@@ -310,6 +311,10 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll))
   width: 30px; height: 30px; border-radius: 50%;
   background: var(--blue); display: flex; align-items: center;
   justify-content: center; font-weight: 700; font-size: 0.85rem;
+  overflow: hidden;
+}
+.navbar__avatar-img {
+  width: 100%; height: 100%; object-fit: cover;
 }
 .navbar__username { font-size: 0.85rem; font-weight: 600; }
 

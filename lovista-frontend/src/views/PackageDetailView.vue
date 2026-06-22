@@ -178,6 +178,7 @@
 </template>
 
 <script setup lang="ts">
+import Swal from 'sweetalert2'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { packageApi, bookingApi } from '@/api'
@@ -258,7 +259,7 @@ async function handleBooking() {
   }
 
   if (!bookingDate.value) {
-    alert('Please select a start date.')
+    Swal.fire({ title: 'Notification', text: 'Please select a start date.', icon: 'info' })
     return
   }
 
@@ -272,11 +273,11 @@ async function handleBooking() {
       total_person: bookingPersons.value
     })
     
-    alert('Booking successful! Redirecting to your bookings...')
+    Swal.fire({ title: 'Notification', text: 'Booking successful! Redirecting to your bookings...', icon: 'info' })
     router.push('/my-bookings')
   } catch (err: any) {
     console.error('Booking failed:', err)
-    alert(err.response?.data?.message || 'Failed to create booking. Please try again.')
+    Swal.fire({ title: 'Notification', text: err.response?.data?.message || 'Failed to create booking. Please try again.', icon: 'info' })
   } finally {
     isBooking.value = false
   }

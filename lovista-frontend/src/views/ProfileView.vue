@@ -145,6 +145,7 @@
 </template>
 
 <script setup lang="ts">
+import Swal from 'sweetalert2'
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
@@ -178,11 +179,11 @@ const onFileSelected = async (event: Event) => {
       if (authStore.user) {
         authStore.user.profile_photo = response.data.profile_photo
       }
-      alert('Profile photo updated!')
+      Swal.fire({ title: 'Notification', text: 'Profile photo updated!', icon: 'info' })
     } catch (err: any) {
       console.error('Upload error:', err)
       const msg = err.response?.data?.detail || JSON.stringify(err.response?.data) || 'Failed to upload photo.'
-      alert('Error: ' + msg)
+      Swal.fire({ title: 'Notification', text: 'Error: ' + msg, icon: 'info' })
     }
   }
 }

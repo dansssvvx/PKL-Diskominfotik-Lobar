@@ -19,7 +19,9 @@ const auth = useAuthStore()
 const route = useRoute()
 
 const hideNav = computed(() => {
-  return ['login', 'register'].includes(route.name as string)
+  const isAuthRoute = ['login', 'register'].includes(route.name as string)
+  const isDashboardRoute = route.path && (route.path.startsWith('/admin') || route.path.startsWith('/operator'))
+  return isAuthRoute || isDashboardRoute
 })
 
 onMounted(() => {

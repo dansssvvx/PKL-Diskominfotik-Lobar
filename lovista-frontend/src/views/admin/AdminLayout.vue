@@ -17,8 +17,8 @@
             :class="{ 'sidebar__nav-item--active': $route.path === item.to }"
             @click="sidebarOpen = false"
           >
-            <span>{{ item.icon }}</span>
-            <span>{{ item.label }}</span>
+            <span class="sidebar__nav-icon">{{ item.icon }}</span>
+            <span class="sidebar__nav-label">{{ item.label }}</span>
             <span class="sidebar__nav-badge" v-if="item.badge">{{ item.badge }}</span>
           </RouterLink>
         </div>
@@ -71,10 +71,18 @@ const sidebarOpen = ref(false)
 
 const currentPageTitle = computed(() => {
   const map: Record<string, string> = {
-    '/admin': 'Dashboard', '/admin/destinations': 'Destinations',
-    '/admin/users': 'Users', '/admin/operators': 'Operators',
-    '/admin/contributions': 'Contributions', '/admin/bookings': 'Bookings',
-    '/admin/activity-logs': 'Activity Logs', '/admin/settings': 'Settings',
+    '/admin': 'Dashboard', 
+    '/admin/destinations': 'Destinations',
+    '/admin/packages': 'Tour Packages', 
+    '/admin/vehicle-rentals': 'Vehicle Rentals',
+    '/admin/culture': 'Culture & Heritage',
+    '/admin/culinary': 'Local Culinary', 
+    '/admin/users': 'Users', 
+    '/admin/operators': 'Operators',
+    '/admin/contributions': 'Contributions', 
+    '/admin/bookings': 'Bookings',
+    '/admin/activity-logs': 'Activity Logs', 
+    '/admin/settings': 'Settings',
   }
   return map[route.path] || 'Dashboard'
 })
@@ -85,7 +93,11 @@ const navGroups = [
   ]},
   { title: 'Content', items: [
     { to: '/admin/destinations', icon: '🏝️', label: 'Destinations' },
-    { to: '/admin/contributions', icon: '📝', label: 'Contributions', badge: '5' },
+    { to: '/admin/packages', icon: '📦', label: 'Tour Packages' },
+    { to: '/admin/vehicle-rentals', icon: '🚗', label: 'Vehicle Rentals' },
+    { to: '/admin/culture', icon: '🎭', label: 'Culture & Heritage' },
+    { to: '/admin/culinary', icon: '🍲', label: 'Local Culinary' },
+    { to: '/admin/contributions', icon: '📝', label: 'Contributions' },
   ]},
   { title: 'Users & Partners', items: [
     { to: '/admin/users', icon: '👥', label: 'Users' },
@@ -124,9 +136,14 @@ function handleLogout() {
   padding: 10px 12px; border-radius: 10px;
   font-size: .88rem; font-weight: 500; color: var(--w70);
   transition: all .2s; margin-bottom: 2px;
+  text-decoration: none;
 }
 .sidebar__nav-item:hover { background: var(--w08); color: var(--white); }
 .sidebar__nav-item--active { background: rgba(26,143,255,.15); color: var(--blue-b); border: 1px solid rgba(26,143,255,.2); }
+
+.sidebar__nav-icon { font-size: 1.1rem; width: 24px; text-align: center; }
+.sidebar__nav-label { flex: 1; }
+
 .sidebar__nav-badge { margin-left: auto; background: var(--blue); color: #fff; font-size: .62rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
 .sidebar__footer { padding: 16px 20px; border-top: 1px solid var(--w08); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .sidebar__user { display: flex; align-items: center; gap: 10px; min-width: 0; }

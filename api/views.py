@@ -9,7 +9,7 @@ from .models import (
     Facility, DestinationFacility, Culinary, Culture, Review, Wishlist,
     TravelAgency, TourPackage, Vehicle, Homestay, HomestayRoom, Booking,
     HomestayBooking, VehicleRental, AIRecommendation, Contribution,
-    Notification
+    Notification, ActivityLog, Setting
 )
 from .serializers import (
     RoleSerializer, UserSerializer, DestinationCategorySerializer,
@@ -17,9 +17,10 @@ from .serializers import (
     CulinarySerializer, CultureSerializer, ReviewSerializer, TourPackageSerializer,
     BookingSerializer, TravelAgencySerializer, VehicleSerializer, HomestaySerializer,
     HomestayRoomSerializer, NotificationSerializer, HomestayBookingSerializer,
-    VehicleRentalSerializer, AIRecommendationSerializer, ContributionSerializer
+    VehicleRentalSerializer, AIRecommendationSerializer, ContributionSerializer,
+    ActivityLogSerializer, SettingSerializer
 )
-
+from .utils import log_activity
 # ... (existing ViewSets)
 
 class HomestayBookingViewSet(viewsets.ModelViewSet):
@@ -54,9 +55,16 @@ class ContributionViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        if self.request.user.is_staff:
-            return self.queryset.all()
-        return self.queryset.filter(contributor=self.request.user)
+        status_filter = self.request.query_params.get('status')
+        qs = self.queryset
+        
+        if not self.request.user.is_staff:
+            qs = qs.filter(contributor=self.request.user)
+            
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+            
+        return qs.order_by('-submitted_at')
 
     def perform_create(self, serializer):
         serializer.save(contributor=self.request.user)
@@ -68,7 +76,50 @@ class ContributionViewSet(viewsets.ModelViewSet):
         contribution.reviewed_by = request.user
         contribution.reviewed_at = timezone.now()
         contribution.save()
+        
+        log_activity(
+            request, 
+            action=f"Approved {contribution.type} contribution",
+            entity_type="Contribution",
+            entity_id=contribution.id
+        )
+        
         return Response({'status': 'approved'})
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        contribution = self.get_object()
+        contribution.status = 'rejected'
+        contribution.rejection_reason = request.data.get('notes', '')
+        contribution.reviewed_by = request.user
+        contribution.reviewed_at = timezone.now()
+        contribution.save()
+        
+        log_activity(
+            request, 
+            action=f"Rejected {contribution.type} contribution",
+            entity_type="Contribution",
+            entity_id=contribution.id
+        )
+        
+        return Response({'status': 'rejected'})
+
+class SettingViewSet(viewsets.ModelViewSet):
+    queryset = Setting.objects.all()
+    serializer_class = SettingSerializer
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [permissions.AllowAny()]
+        return [permissions.IsAdminUser()]
+
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            return self.queryset.all()
+        return self.queryset.filter(is_public=True)
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=self.request.user)
 
 class RoleViewSet(viewsets.ModelViewSet):
     queryset = Role.objects.all()
@@ -107,6 +158,16 @@ class UserViewSet(viewsets.ModelViewSet):
                 phone=request.data.get('phone'),
                 role=user_role
             )
+            
+            # Automatically create a TravelAgency profile for operators
+            if role_name == 'operator':
+                TravelAgency.objects.create(
+                    user=user,
+                    business_name=user.fullname,
+                    phone=user.phone,
+                    email=user.email
+                )
+                
             return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -148,6 +209,54 @@ class TourismDestinationViewSet(viewsets.ModelViewSet):
     queryset = TourismDestination.objects.all()
     serializer_class = TourismDestinationSerializer
     lookup_field = 'slug'
+
+    def get_queryset(self):
+        qs = self.queryset
+        status_filter = self.request.query_params.get('status')
+        category_filter = self.request.query_params.get('category')
+        search_query = self.request.query_params.get('search')
+
+        if not self.request.user.is_staff:
+            # Regular users can only see published destinations
+            qs = qs.filter(status='published')
+        elif status_filter:
+            qs = qs.filter(status=status_filter)
+            
+        if category_filter:
+            qs = qs.filter(category_id=category_filter)
+            
+        if search_query:
+            qs = qs.filter(name__icontains=search_query)
+
+        return qs.order_by('-created_at')
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        log_activity(
+            self.request, 
+            action="Created destination",
+            entity_type="TourismDestination",
+            entity_id=instance.id
+        )
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        log_activity(
+            self.request, 
+            action="Updated destination",
+            entity_type="TourismDestination",
+            entity_id=instance.id
+        )
+
+    def perform_destroy(self, instance):
+        dest_id = instance.id
+        instance.delete()
+        log_activity(
+            self.request, 
+            action="Deleted destination",
+            entity_type="TourismDestination",
+            entity_id=dest_id
+        )
 
     def retrieve(self, request, *args, **kwargs):
         # Ambil instance berdasarkan slug
@@ -220,6 +329,45 @@ class CulinaryViewSet(viewsets.ModelViewSet):
     queryset = Culinary.objects.all()
     serializer_class = CulinarySerializer
 
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        log_activity(
+            self.request,
+            action="Created culinary",
+            entity_type="Culinary",
+            entity_id=instance.id,
+            new_value={"name": instance.name}
+        )
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        log_activity(
+            self.request,
+            action="Updated culinary",
+            entity_type="Culinary",
+            entity_id=instance.id,
+            new_value={"name": instance.name}
+        )
+
+    def perform_destroy(self, instance):
+        item_id = instance.id
+        item_name = instance.name
+        instance.delete()
+        log_activity(
+            self.request,
+            action="Deleted culinary",
+            entity_type="Culinary",
+            entity_id=item_id,
+            old_value={"name": item_name}
+        )
+
+    def get_queryset(self):
+        qs = self.queryset
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(name__icontains=search)
+        return qs.order_by('-created_at')
+
     @action(detail=False, methods=['get'])
     def featured(self, request):
         items = self.queryset.filter(is_verified=True)[:4]
@@ -229,6 +377,21 @@ class CulinaryViewSet(viewsets.ModelViewSet):
 class CultureViewSet(viewsets.ModelViewSet):
     queryset = Culture.objects.all()
     serializer_class = CultureSerializer
+
+    def get_queryset(self):
+        qs = self.queryset
+        status_filter = self.request.query_params.get('status')
+        search = self.request.query_params.get('search')
+        
+        if not self.request.user.is_staff:
+            qs = qs.filter(status='published')
+        elif status_filter:
+            qs = qs.filter(status=status_filter)
+            
+        if search:
+            qs = qs.filter(name__icontains=search)
+            
+        return qs.order_by('-created_at')
 
     @action(detail=False, methods=['get'])
     def featured(self, request):
@@ -244,6 +407,18 @@ class TourPackageViewSet(viewsets.ModelViewSet):
     queryset = TourPackage.objects.all()
     serializer_class = TourPackageSerializer
     lookup_field = 'slug'
+
+    def get_queryset(self):
+        qs = self.queryset
+        agency_id = self.request.query_params.get('agency')
+        search = self.request.query_params.get('search')
+        
+        if agency_id:
+            qs = qs.filter(agency_id=agency_id)
+        if search:
+            qs = qs.filter(name__icontains=search)
+            
+        return qs.order_by('-created_at')
 
     @action(detail=False, methods=['get'])
     def featured(self, request):
@@ -323,6 +498,51 @@ class VehicleViewSet(viewsets.ModelViewSet):
     queryset = Vehicle.objects.all()
     serializer_class = VehicleSerializer
 
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        log_activity(
+            self.request,
+            action="Created vehicle",
+            entity_type="Vehicle",
+            entity_id=instance.id,
+            new_value={"plate_number": instance.plate_number, "model": instance.model}
+        )
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        log_activity(
+            self.request,
+            action="Updated vehicle",
+            entity_type="Vehicle",
+            entity_id=instance.id,
+            new_value={"plate_number": instance.plate_number, "model": instance.model}
+        )
+
+    def perform_destroy(self, instance):
+        item_id = instance.id
+        item_model = instance.model
+        item_plate = instance.plate_number
+        instance.delete()
+        log_activity(
+            self.request,
+            action="Deleted vehicle",
+            entity_type="Vehicle",
+            entity_id=item_id,
+            old_value={"plate_number": item_plate, "model": item_model}
+        )
+
+    def get_queryset(self):
+        qs = self.queryset
+        agency_id = self.request.query_params.get('agency')
+        search = self.request.query_params.get('search')
+        
+        if agency_id:
+            qs = qs.filter(agency_id=agency_id)
+        if search:
+            qs = qs.filter(models.Q(model__icontains=search) | models.Q(brand__icontains=search))
+            
+        return qs.order_by('-created_at')
+
 class HomestayViewSet(viewsets.ModelViewSet):
     queryset = Homestay.objects.all()
     serializer_class = HomestaySerializer
@@ -355,28 +575,179 @@ class NotificationViewSet(viewsets.ModelViewSet):
         self.get_queryset().filter(is_read=False).update(is_read=True)
         return Response({'detail': 'All notifications marked as read'})
 
-class AdminViewSet(viewsets.ViewSet):
+class AdminViewSet(viewsets.GenericViewSet):
+    queryset = ActivityLog.objects.all()
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     @action(detail=False, methods=['get'])
     def stats(self, request):
+        from django.db.models import Sum
+        
+        # Calculate revenue based on the SQL schema
+        # Booking has a virtual column 'final_price' in SQL, in Django we use the total_price - discount_amount
+        package_revenue = Booking.objects.filter(payment_status='paid').aggregate(
+            total=Sum(F('total_price') - F('discount_amount'))
+        )['total'] or 0
+        
+        # HomestayBooking and VehicleRental use 'total_price'
+        homestay_revenue = HomestayBooking.objects.filter(payment_status='paid').aggregate(
+            total=Sum('total_price')
+        )['total'] or 0
+        
+        vehicle_revenue = VehicleRental.objects.filter(payment_status='paid').aggregate(
+            total=Sum('total_price')
+        )['total'] or 0
+        
+        total_revenue = float(package_revenue) + float(homestay_revenue) + float(vehicle_revenue)
+
         data = {
             'total_destinations': TourismDestination.objects.count(),
             'total_users': User.objects.count(),
-            'total_bookings': Booking.objects.count(),
-            'total_revenue': 0, # Placeholder
+            'total_bookings': Booking.objects.count() + HomestayBooking.objects.count() + VehicleRental.objects.count(),
+            'total_revenue': total_revenue,
+            'total_vehicles': Vehicle.objects.count(),
             'pending_contributions': Contribution.objects.filter(status='pending').count(),
-            'active_operators': User.objects.filter(role__name='operator').count()
+            'active_operators': User.objects.filter(role_id=2, is_active=True).count()
         }
         return Response(data)
 
     @action(detail=False, methods=['get'])
     def users(self, request):
-        users = User.objects.all()
+        users = User.objects.all().order_by('-created_at')
+        role = request.query_params.get('role')
+        if role:
+            users = users.filter(role__name=role)
+
+        page = self.paginate_queryset(users)
+        if page is not None:
+            serializer = UserSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
         serializer = UserSerializer(users, many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['post'], url_path='verify')
+    def verify_operator(self, request, pk=None):
+        try:
+            user = User.objects.get(pk=pk)
+            user.is_verified = True
+            user.save()
+            
+            log_activity(
+                request, 
+                action="Verified operator",
+                entity_type="User",
+                entity_id=user.id
+            )
+            
+            return Response({'detail': 'User operator verified successfully'})
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['post'], url_path='toggle-status')
+    def toggle_status(self, request, pk=None):
+        try:
+            user = User.objects.get(pk=pk)
+            user.is_active = not user.is_active
+            user.save()
+            
+            status_str = "activated" if user.is_active else "deactivated"
+            log_activity(
+                request, 
+                action=f"{status_str.capitalize()} user",
+                entity_type="User",
+                entity_id=user.id
+            )
+            
+            return Response({
+                'detail': f'User {status_str} successfully',
+                'is_active': user.is_active
+            })
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=['get'])
+    def bookings(self, request):
+        booking_type = request.query_params.get('type', 'package')
+        status_filter = request.query_params.get('status')
+        
+        if booking_type == 'homestay':
+            queryset = HomestayBooking.objects.all().order_by('-created_at')
+            serializer_class = HomestayBookingSerializer
+        elif booking_type == 'vehicle':
+            queryset = VehicleRental.objects.all().order_by('-created_at')
+            serializer_class = VehicleRentalSerializer
+        else:
+            queryset = Booking.objects.all().order_by('-created_at')
+            serializer_class = BookingSerializer
+            
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+            
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = serializer_class(page, many=True)
+            return self.get_paginated_response(serializer.data)
+            
+        serializer = serializer_class(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'], url_path='bookings/update-status')
+    def update_booking_status(self, request):
+        booking_id = request.data.get('id')
+        booking_type = request.data.get('type', 'package')
+        new_status = request.data.get('status')
+        new_payment_status = request.data.get('payment_status')
+        
+        try:
+            if booking_type == 'homestay':
+                booking = HomestayBooking.objects.get(pk=booking_id)
+            elif booking_type == 'vehicle':
+                booking = VehicleRental.objects.get(pk=booking_id)
+            else:
+                booking = Booking.objects.get(pk=booking_id)
+                
+            if new_status:
+                booking.status = new_status
+            if new_payment_status:
+                booking.payment_status = new_payment_status
+                
+            booking.save()
+            
+            log_activity(
+                request, 
+                action=f"Updated {booking_type} booking status",
+                entity_type=booking.__class__.__name__,
+                entity_id=booking.id
+            )
+            
+            return Response({'detail': 'Booking status updated successfully'})
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
     @action(detail=False, methods=['get'], url_path='activity-logs')
     def activity_logs(self, request):
-        # ActivityLog model exists but no data or serializer needed for now
-        return Response([])
+        from rest_framework.pagination import PageNumberPagination
+
+        logs = ActivityLog.objects.all().order_by('-created_at')
+        
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        
+        if date_from:
+            logs = logs.filter(created_at__gte=date_from)
+        if date_to:
+            # Append time to include the whole end day
+            logs = logs.filter(created_at__lte=f"{date_to} 23:59:59")
+
+        paginator = PageNumberPagination()
+        paginator.page_size_query_param = 'page_size'
+        paginator.page_size = 10 # Default page size
+
+        page = paginator.paginate_queryset(logs, request)
+        if page is not None:
+            serializer = ActivityLogSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+        
+        serializer = ActivityLogSerializer(logs, many=True)
+        return Response(serializer.data)

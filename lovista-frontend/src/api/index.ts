@@ -61,9 +61,9 @@ export const destinationApi = {
     api.get<TourismDestination>(`/destinations/${slug}/`),
   create: (data: Partial<TourismDestination>) =>
     api.post<TourismDestination>('/destinations/', data),
-  update: (id: number, data: Partial<TourismDestination>) =>
-    api.patch<TourismDestination>(`/destinations/${id}/`, data),
-  delete: (id: number) => api.delete(`/destinations/${id}/`),
+  update: (slug: string, data: Partial<TourismDestination>) =>
+    api.patch<TourismDestination>(`/destinations/${slug}/`, data),
+  delete: (slug: string) => api.delete(`/destinations/${slug}/`),
   featured: () => api.get<TourismDestination[]>('/destinations/featured/'),
   popular: () => api.get<TourismDestination[]>('/destinations/popular/'),
   nearby: (lat: number, lng: number, radius = 10) =>
@@ -82,9 +82,9 @@ export const packageApi = {
   detail: (slug: string) => api.get<TourPackage>(`/packages/${slug}/`),
   featured: () => api.get<TourPackage[]>('/packages/featured/'),
   create: (data: Partial<TourPackage>) => api.post<TourPackage>('/packages/', data),
-  update: (id: number, data: Partial<TourPackage>) =>
-    api.patch<TourPackage>(`/packages/${id}/`, data),
-  delete: (id: number) => api.delete(`/packages/${id}/`),
+  update: (slug: string, data: Partial<TourPackage>) =>
+    api.patch<TourPackage>(`/packages/${slug}/`, data),
+  delete: (slug: string) => api.delete(`/packages/${slug}/`),
 }
 
 // ─── HOMESTAY ────────────────────────────────────────────────────────────────
@@ -109,6 +109,7 @@ export const vehicleApi = {
   create: (data: Partial<Vehicle>) => api.post<Vehicle>('/vehicles/', data),
   update: (id: number, data: Partial<Vehicle>) =>
     api.patch<Vehicle>(`/vehicles/${id}/`, data),
+  delete: (id: number) => api.delete(`/vehicles/${id}/`),
 }
 
 // ─── CULTURE ─────────────────────────────────────────────────────────────────
@@ -119,6 +120,7 @@ export const cultureApi = {
   create: (data: Partial<Culture>) => api.post<Culture>('/cultures/', data),
   update: (id: number, data: Partial<Culture>) =>
     api.patch<Culture>(`/cultures/${id}/`, data),
+  delete: (id: number) => api.delete(`/cultures/${id}/`),
   featured: () => api.get<Culture[]>('/cultures/featured/'),
 }
 
@@ -127,6 +129,10 @@ export const culinaryApi = {
   list: (params?: { search?: string; destination?: number; page?: number }) =>
     api.get<PaginatedResponse<Culinary>>('/culinaries/', { params }),
   detail: (id: number) => api.get<Culinary>(`/culinaries/${id}/`),
+  create: (data: Partial<Culinary>) => api.post<Culinary>('/culinaries/', data),
+  update: (id: number, data: Partial<Culinary>) =>
+    api.patch<Culinary>(`/culinaries/${id}/`, data),
+  delete: (id: number) => api.delete(`/culinaries/${id}/`),
   featured: () => api.get<Culinary[]>('/culinaries/featured/'),
 }
 
@@ -190,10 +196,22 @@ export const adminApi = {
   }>('/admin/stats/'),
   users: (params?: { role?: string; page?: number }) =>
     api.get<PaginatedResponse<User>>('/admin/users/', { params }),
-  activityLogs: (params?: { page?: number }) =>
+  activityLogs: (params?: { page?: number; page_size?: number; date_from?: string; date_to?: string }) =>
     api.get<PaginatedResponse<ActivityLog>>('/admin/activity-logs/', { params }),
   verifyAgency: (id: number) => api.post(`/admin/agencies/${id}/verify/`),
+  verifyOperator: (id: number) => api.post(`/admin/${id}/verify/`),
   verifyHomestay: (id: number) => api.post(`/admin/homestays/${id}/verify/`),
+  toggleUserStatus: (id: number) => api.post(`/admin/${id}/toggle-status/`),
+  allBookings: (params: { type: string; status?: string; page?: number }) =>
+    api.get<PaginatedResponse<any>>('/admin/bookings/', { params }),
+  updateBookingStatus: (data: { id: number; type: string; status?: string; payment_status?: string }) =>
+    api.post('/admin/bookings/update-status/', data),
+}
+
+// ─── SETTINGS ────────────────────────────────────────────────────────────────
+export const settingApi = {
+  list: () => api.get<any[]>('/settings/'),
+  update: (id: number, data: { value: string }) => api.patch(`/settings/${id}/`, data),
 }
 
 // ─── AGENCY / OPERATOR ───────────────────────────────────────────────────────
