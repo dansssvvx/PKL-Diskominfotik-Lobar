@@ -18,7 +18,7 @@ from .serializers import (
     BookingSerializer, TravelAgencySerializer, VehicleSerializer, HomestaySerializer,
     HomestayRoomSerializer, NotificationSerializer, HomestayBookingSerializer,
     VehicleRentalSerializer, AIRecommendationSerializer, ContributionSerializer,
-    ActivityLogSerializer, SettingSerializer
+    ActivityLogSerializer, SettingSerializer, WishlistSerializer
 )
 from .utils import log_activity
 # ... (existing ViewSets)
@@ -38,16 +38,96 @@ class VehicleRentalViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user)
+        
+    def perform_create(self, serializer):
+        import uuid
+        vehicle = serializer.validated_data['vehicle']
+        start_date = serializer.validated_data['start_date']
+        end_date = serializer.validated_data['end_date']
+        driver_included = serializer.validated_data.get('driver_included', False)
+        
+        diff = end_date - start_date
+        total_days = diff.days + 1
+        if total_days < 1:
+            total_days = 1
+            
+        daily_rate = vehicle.daily_rate
+        driver_rate = vehicle.driver_rate if driver_included else 0
+        total_price = (daily_rate + driver_rate) * total_days
+        
+        rental_number = f"RNT-{uuid.uuid4().hex[:8].upper()}"
+        
+        serializer.save(
+            user=self.request.user,
+            rental_number=rental_number,
+            daily_rate=daily_rate,
+            driver_rate=driver_rate,
+            total_price=total_price
+        )
 
 class AIRecommendationViewSet(viewsets.ModelViewSet):
     queryset = AIRecommendation.objects.all()
     serializer_class = AIRecommendationSerializer
     
     def perform_create(self, serializer):
-        if self.request.user.is_authenticated:
-            serializer.save(user=self.request.user)
-        else:
-            serializer.save()
+        from .models import TourismDestination
+        import json
+        
+        data = self.request.data
+        interests = data.get('interests', [])
+        travel_style = data.get('travel_style', '')
+        
+        # Simple heuristic: find destinations matching the requested categories/interests
+        qs = TourismDestination.objects.filter(is_active=True)
+        
+        matches = []
+        for dest in qs:
+            score = 0
+            if travel_style.lower() in dest.description.lower() or travel_style.lower() in dest.name.lower():
+                score += 2
+            for interest in interests:
+                if interest.lower() in dest.category.name.lower() or interest.lower() in dest.description.lower():
+                    score += 1
+            if score > 0:
+                matches.append((score, dest))
+                
+        # Sort by score descending and take top 3
+        matches.sort(key=lambda x: x[0], reverse=True)
+        top_destinations = matches[:3]
+        
+        # Format for JSON
+        recommendations = []
+        for _, dest in top_destinations:
+            recommendations.append({
+                'slug': dest.slug,
+                'name': dest.name,
+                'category': dest.category.name,
+                'description': dest.description[:100] + '...',
+                'image': dest.main_image.url if dest.main_image else None
+            })
+            
+        # Fallback if no exact matches: just return 3 featured
+        if not recommendations:
+            featured = TourismDestination.objects.filter(is_active=True, is_featured=True)[:3]
+            for dest in featured:
+                recommendations.append({
+                    'slug': dest.slug,
+                    'name': dest.name,
+                    'category': dest.category.name,
+                    'description': dest.description[:100] + '...',
+                    'image': dest.main_image.url if dest.main_image else None
+                })
+
+        user = self.request.user if self.request.user.is_authenticated else None
+        serializer.save(user=user, recommendations=recommendations)
+
+class WishlistViewSet(viewsets.ModelViewSet):
+    queryset = Wishlist.objects.all()
+    serializer_class = WishlistSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user).select_related('destination').order_by('-created_at')
 
 class ContributionViewSet(viewsets.ModelViewSet):
     queryset = Contribution.objects.all()
@@ -408,16 +488,42 @@ class TourPackageViewSet(viewsets.ModelViewSet):
     serializer_class = TourPackageSerializer
     lookup_field = 'slug'
 
+    def perform_create(self, serializer):
+        """Auto-assign agency from the authenticated operator."""
+        user = self.request.user
+        if user.is_authenticated and not user.is_staff:
+            try:
+                agency = TravelAgency.objects.get(user=user)
+                serializer.save(agency=agency)
+                return
+            except TravelAgency.DoesNotExist:
+                pass
+        serializer.save()
+
     def get_queryset(self):
         qs = self.queryset
-        agency_id = self.request.query_params.get('agency')
+        user = self.request.user
         search = self.request.query_params.get('search')
-        
-        if agency_id:
-            qs = qs.filter(agency_id=agency_id)
+        is_active = self.request.query_params.get('is_active')
+
+        # If authenticated operator (non-admin): scope to their agency only
+        if user.is_authenticated and not user.is_staff:
+            try:
+                agency = TravelAgency.objects.get(user=user)
+                qs = qs.filter(agency=agency)
+            except TravelAgency.DoesNotExist:
+                qs = qs.none()
+        else:
+            # Admin can filter by explicit agency param
+            agency_id = self.request.query_params.get('agency')
+            if agency_id:
+                qs = qs.filter(agency_id=agency_id)
+
         if search:
             qs = qs.filter(name__icontains=search)
-            
+        if is_active is not None:
+            qs = qs.filter(is_active=(is_active.lower() == 'true'))
+
         return qs.order_by('-created_at')
 
     @action(detail=False, methods=['get'])
@@ -433,6 +539,30 @@ class BookingViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        import uuid
+        from datetime import timedelta
+        package = serializer.validated_data['package']
+        start_date = serializer.validated_data['start_date']
+        total_person = serializer.validated_data['total_person']
+        
+        end_date = start_date + timedelta(days=package.duration_days)
+        
+        from decimal import Decimal
+        price = package.price_per_person
+        if package.discount_percentage and package.discount_percentage > 0:
+            price = price - (price * (package.discount_percentage / Decimal('100.0')))
+            
+        total_price = price * total_person
+        booking_number = f"BKG-{uuid.uuid4().hex[:8].upper()}"
+        
+        serializer.save(
+            user=self.request.user,
+            booking_number=booking_number,
+            end_date=end_date,
+            total_price=total_price
+        )
 
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
@@ -478,28 +608,119 @@ class TravelAgencyViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='me/dashboard', permission_classes=[permissions.IsAuthenticated])
     def dashboard(self, request):
+        from django.db.models import Sum
         try:
             agency = TravelAgency.objects.get(user=request.user)
         except TravelAgency.DoesNotExist:
             return Response({'detail': 'Agency profile not found'}, status=status.HTTP_404_NOT_FOUND)
-            
-        # Dummy stats for now
+
+        pkg_bookings = Booking.objects.filter(package__agency=agency)
+        pkg_revenue = pkg_bookings.filter(payment_status='paid').aggregate(
+            total=Sum('total_price')
+        )['total'] or 0
+
+        # Homestay bookings for homestays owned by this agency's user
+        hs_bookings = HomestayBooking.objects.filter(room__homestay__user=request.user)
+        hs_revenue = hs_bookings.filter(payment_status='paid').aggregate(
+            total=Sum('total_price')
+        )['total'] or 0
+
+        veh_bookings = VehicleRental.objects.filter(vehicle__agency=agency)
+        veh_revenue = veh_bookings.filter(payment_status='paid').aggregate(
+            total=Sum('total_price')
+        )['total'] or 0
+
+        total_bookings = pkg_bookings.count() + hs_bookings.count() + veh_bookings.count()
+        pending_bookings = (
+            pkg_bookings.filter(status='pending').count() +
+            hs_bookings.filter(status='pending').count() +
+            veh_bookings.filter(status='pending').count()
+        )
+
         data = {
-            'total_bookings': Booking.objects.filter(package__agency=agency).count(),
-            'pending_bookings': Booking.objects.filter(package__agency=agency, status='pending').count(),
-            'total_revenue': 0, # Should calculate from paid bookings
+            'total_bookings': total_bookings,
+            'pending_bookings': pending_bookings,
+            'total_revenue': float(pkg_revenue) + float(hs_revenue) + float(veh_revenue),
             'active_packages': TourPackage.objects.filter(agency=agency, is_active=True).count(),
             'active_vehicles': Vehicle.objects.filter(agency=agency, is_active=True).count(),
-            'active_homestays': 0 # Homestays are linked to owners (User), not Agency in current model?
+            'active_homestays': Homestay.objects.filter(user=request.user, is_active=True).count(),
         }
         return Response(data)
+
+    @action(detail=False, methods=['get'], url_path='me/bookings', permission_classes=[permissions.IsAuthenticated])
+    def me_bookings(self, request):
+        """Tour package bookings for this operator's agency."""
+        try:
+            agency = TravelAgency.objects.get(user=request.user)
+        except TravelAgency.DoesNotExist:
+            return Response({'detail': 'Agency profile not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        qs = Booking.objects.filter(package__agency=agency).order_by('-created_at')
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = BookingSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = BookingSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='me/homestay-bookings', permission_classes=[permissions.IsAuthenticated])
+    def me_homestay_bookings(self, request):
+        """Homestay bookings for homestays belonging to this operator."""
+        qs = HomestayBooking.objects.filter(
+            room__homestay__user=request.user
+        ).order_by('-created_at')
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = HomestayBookingSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = HomestayBookingSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='me/rentals', permission_classes=[permissions.IsAuthenticated])
+    def me_rentals(self, request):
+        """Vehicle rentals for vehicles belonging to this operator's agency."""
+        try:
+            agency = TravelAgency.objects.get(user=request.user)
+        except TravelAgency.DoesNotExist:
+            return Response({'detail': 'Agency profile not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        qs = VehicleRental.objects.filter(vehicle__agency=agency).order_by('-created_at')
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = VehicleRentalSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = VehicleRentalSerializer(qs, many=True)
+        return Response(serializer.data)
 
 class VehicleViewSet(viewsets.ModelViewSet):
     queryset = Vehicle.objects.all()
     serializer_class = VehicleSerializer
 
     def perform_create(self, serializer):
-        instance = serializer.save()
+        """Auto-assign agency from the authenticated operator."""
+        user = self.request.user
+        agency = None
+        if user.is_authenticated and not user.is_staff:
+            try:
+                agency = TravelAgency.objects.get(user=user)
+            except TravelAgency.DoesNotExist:
+                pass
+        instance = serializer.save(agency=agency) if agency else serializer.save()
         log_activity(
             self.request,
             action="Created vehicle",
@@ -533,13 +754,29 @@ class VehicleViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = self.queryset
-        agency_id = self.request.query_params.get('agency')
+        user = self.request.user
         search = self.request.query_params.get('search')
-        
-        if agency_id:
-            qs = qs.filter(agency_id=agency_id)
+        vehicle_type = self.request.query_params.get('type')
+        available = self.request.query_params.get('available')
+
+        # If authenticated operator (non-admin): scope to their agency only
+        if user.is_authenticated and not user.is_staff:
+            try:
+                agency = TravelAgency.objects.get(user=user)
+                qs = qs.filter(agency=agency)
+            except TravelAgency.DoesNotExist:
+                qs = qs.none()
+        else:
+            agency_id = self.request.query_params.get('agency')
+            if agency_id:
+                qs = qs.filter(agency_id=agency_id)
+
         if search:
             qs = qs.filter(models.Q(model__icontains=search) | models.Q(brand__icontains=search))
+        if vehicle_type:
+            qs = qs.filter(type=vehicle_type)
+        if available is not None:
+            qs = qs.filter(is_available=(available.lower() == 'true'))
             
         return qs.order_by('-created_at')
 

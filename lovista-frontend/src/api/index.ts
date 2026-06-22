@@ -95,6 +95,7 @@ export const homestayApi = {
   create: (data: Partial<Homestay>) => api.post<Homestay>('/homestays/', data),
   update: (id: number, data: Partial<Homestay>) =>
     api.patch<Homestay>(`/homestays/${id}/`, data),
+  delete: (id: number) => api.delete(`/homestays/${id}/`),
   checkAvailability: (roomId: number, checkIn: string, checkOut: string) =>
     api.get<{ available: boolean }>(`/homestay-rooms/${roomId}/availability/`, {
       params: { check_in: checkIn, check_out: checkOut }

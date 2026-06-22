@@ -174,17 +174,76 @@
         <RouterLink to="/packages" class="btn btn-primary mt-4">Browse Other Packages</RouterLink>
       </div>
     </div>
+    
+    <!-- E-Receipt Modal -->
+    <div class="receipt-modal-overlay" v-if="showReceipt" @click="showReceipt = false">
+      <div class="receipt-container card" @click.stop id="receipt-content" style="background:#fff;color:#000;padding:32px;width:100%;max-width:500px;border-radius:12px;position:relative">
+        <div style="text-align:center;border-bottom:2px dashed #ccc;padding-bottom:16px;margin-bottom:16px">
+          <h2 style="font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:#2563eb;margin:0">LOVISTA</h2>
+          <p style="margin:4px 0 0;font-size:0.9rem;color:#666">E-Receipt - Tour Package Booking</p>
+        </div>
+        
+        <div style="margin-bottom:24px" v-if="pkg">
+          <div style="font-weight:bold;font-size:1.2rem;margin-bottom:4px">{{ pkg.name }}</div>
+          <div style="font-size:0.9rem;color:#444">{{ pkg.duration_days }} Days {{ pkg.duration_nights }} Nights</div>
+        </div>
+
+        <table style="width:100%;font-size:0.95rem;margin-bottom:24px;border-collapse:collapse">
+          <tr style="border-bottom:1px solid #eee">
+            <td style="padding:8px 0;color:#666">Start Date</td>
+            <td style="padding:8px 0;text-align:right;font-weight:bold">{{ bookingDate }}</td>
+          </tr>
+          <tr style="border-bottom:1px solid #eee">
+            <td style="padding:8px 0;color:#666">Participants</td>
+            <td style="padding:8px 0;text-align:right;font-weight:bold">{{ bookingPersons }} Person(s)</td>
+          </tr>
+          <tr style="border-bottom:1px solid #eee">
+            <td style="padding:8px 0;color:#666">Booking By</td>
+            <td style="padding:8px 0;text-align:right;font-weight:bold">{{ auth.user?.fullname || auth.user?.email || 'Guest' }}</td>
+          </tr>
+        </table>
+
+        <div style="background:#f8fafc;padding:16px;border-radius:8px" v-if="pkg">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+            <span style="color:#666">Package Price (x{{ bookingPersons }})</span>
+            <span>Rp {{ formatNumber(pkg.discounted_price || pkg.price_per_person) }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;border-top:1px solid #cbd5e1;padding-top:12px;font-weight:bold;font-size:1.2rem;color:#0f172a">
+            <span>Total Paid</span>
+            <span>Rp {{ formatNumber(bookingTotal) }}</span>
+          </div>
+        </div>
+        
+        <div style="margin-top:24px;text-align:center">
+          <svg id="receipt-barcode"></svg>
+        </div>
+
+        <div style="margin-top:16px;text-align:center;font-size:0.8rem;color:#94a3b8">
+          This is an automatically generated receipt.<br>Please present this barcode to the tour agency.
+        </div>
+        
+        <!-- Action Buttons (ignored when generating PDF) -->
+        <div data-html2canvas-ignore="true" style="margin-top:24px;display:flex;gap:12px">
+          <button class="btn btn-primary" style="flex:1" @click="downloadReceipt">Save as PDF</button>
+          <button class="btn btn-ghost" style="flex:1;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1" @click="showReceipt = false">Close</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import Swal from 'sweetalert2'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { packageApi, bookingApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import TheNavbar from '@/components/layout/TheNavbar.vue'
 import type { TourPackage } from '@/types'
+// @ts-ignore
+import html2pdf from 'html2pdf.js'
+// @ts-ignore
+import JsBarcode from 'jsbarcode'
 
 const route = useRoute()
 const router = useRouter()
@@ -196,8 +255,11 @@ const isBooking = ref(false)
 
 const bookingDate = ref('')
 const bookingPersons = ref(1)
+const showReceipt = ref(false)
+const receiptId = ref('')
 
-const today = new Date().toISOString().split('T')[0]
+const _now = new Date()
+const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`
 
 const inclusions = computed(() => pkg.value?.package_inclusions?.filter(i => i.is_included) || [])
 const exclusions = computed(() => pkg.value?.package_inclusions?.filter(i => !i.is_included) || [])
@@ -262,25 +324,70 @@ async function handleBooking() {
     Swal.fire({ title: 'Notification', text: 'Please select a start date.', icon: 'info' })
     return
   }
+  
+  if (bookingDate.value < today) {
+    Swal.fire({ title: 'Error', text: 'Tanggal booking tidak boleh di masa lalu!', icon: 'error' })
+    return
+  }
 
   if (!pkg.value) return
 
   isBooking.value = true
   try {
     const res = await bookingApi.create({
-      package_id: pkg.value.id,
+      package: pkg.value.id,
       start_date: bookingDate.value,
       total_person: bookingPersons.value
-    })
+    } as any)
     
-    Swal.fire({ title: 'Notification', text: 'Booking successful! Redirecting to your bookings...', icon: 'info' })
-    router.push('/my-bookings')
+    Swal.fire({
+      title: 'Success!',
+      text: 'Booking berhasil diproses!',
+      icon: 'success',
+      confirmButtonText: 'Lihat E-Receipt'
+    }).then(() => {
+      // Use the booking_number from the backend if available, otherwise generate one
+      receiptId.value = res.data?.booking_number || 'BKG-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase()
+      showReceipt.value = true
+      nextTick(() => {
+        JsBarcode("#receipt-barcode", receiptId.value, {
+          format: "CODE128",
+          displayValue: true,
+          fontSize: 14,
+          height: 50,
+          margin: 0,
+          lineColor: "#0f172a"
+        })
+      })
+    })
   } catch (err: any) {
     console.error('Booking failed:', err)
-    Swal.fire({ title: 'Notification', text: err.response?.data?.message || 'Failed to create booking. Please try again.', icon: 'info' })
+    let errorMsg = 'Failed to create booking. Please try again.'
+    if (err.response?.data) {
+       errorMsg = typeof err.response.data === 'string' ? err.response.data : JSON.stringify(err.response.data)
+    }
+    Swal.fire({ title: 'Error', text: errorMsg, icon: 'error' })
   } finally {
     isBooking.value = false
   }
+}
+
+function downloadReceipt() {
+  const element = document.getElementById('receipt-content')
+  if (!element || !pkg.value) return
+  
+  const opt = {
+    margin: [10, 10, 10, 10],
+    filename: `LoVista-Package-${pkg.value.slug}-${Date.now()}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  }
+  
+  html2pdf().set(opt).from(element).save().then(() => {
+    Swal.fire({ title: 'Success', text: 'E-Receipt saved successfully!', icon: 'success' })
+    showReceipt.value = false
+  })
 }
 
 onMounted(fetchPackage)
@@ -389,5 +496,18 @@ onMounted(fetchPackage)
   .pkg-hero__title { font-size: 2.2rem; }
   .pkg-hero__meta { flex-direction: column; align-items: flex-start; gap: 8px; }
   .pkg-hero__meta .dot { display: none; }
+}
+
+/* Receipt Modal Styles */
+.receipt-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
 }
 </style>

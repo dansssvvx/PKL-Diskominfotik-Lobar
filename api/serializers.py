@@ -120,9 +120,13 @@ class BookingSerializer(serializers.ModelSerializer):
     user_name = serializers.ReadOnlyField(source='user.fullname')
     user_email = serializers.ReadOnlyField(source='user.email')
     agency_name = serializers.ReadOnlyField(source='package.agency.business_name')
+    booking_number = serializers.CharField(read_only=True)
+    end_date = serializers.DateField(read_only=True)
+    total_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     class Meta:
         model = Booking
         fields = '__all__'
+        read_only_fields = ['user', 'status', 'payment_status', 'payment_proof']
 
 class VehicleSerializer(serializers.ModelSerializer):
     agency_name = serializers.ReadOnlyField(source='agency.business_name')
@@ -166,9 +170,11 @@ class VehicleRentalSerializer(serializers.ModelSerializer):
     vehicle_brand = serializers.ReadOnlyField(source='vehicle.brand')
     agency_name = serializers.ReadOnlyField(source='vehicle.agency.business_name')
     user_name = serializers.ReadOnlyField(source='user.fullname')
+    user_email = serializers.ReadOnlyField(source='user.email')
     class Meta:
         model = VehicleRental
         fields = '__all__'
+        read_only_fields = ['rental_number', 'user', 'daily_rate', 'driver_rate', 'total_price', 'status', 'payment_status', 'payment_proof', 'created_at', 'updated_at']
 
 class AIRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -183,4 +189,10 @@ class ContributionSerializer(serializers.ModelSerializer):
 class SettingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Setting
+        fields = '__all__'
+
+class WishlistSerializer(serializers.ModelSerializer):
+    destination = TourismDestinationSerializer(read_only=True)
+    class Meta:
+        model = Wishlist
         fields = '__all__'

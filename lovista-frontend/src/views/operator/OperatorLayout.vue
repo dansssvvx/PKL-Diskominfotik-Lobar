@@ -39,6 +39,7 @@
           Operator / <span>{{ currentPageTitle }}</span>
         </div>
         <div class="admin-topbar__right">
+          <RouterLink to="/" class="btn btn-ghost btn-sm" style="margin-right: 12px;">← Back</RouterLink>
           <span class="badge" :class="agency?.is_verified ? 'badge-success' : 'badge-warning'">
             {{ agency?.is_verified ? '✅ Verified' : '⏳ Pending Verification' }}
           </span>

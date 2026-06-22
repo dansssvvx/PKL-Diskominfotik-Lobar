@@ -56,7 +56,7 @@
           <!-- Grid -->
           <div v-else>
             <div class="grid grid-3">
-              <router-link :to="'/culinary/' + item.id" class="product-card" v-for="item in items" :key="item.id">
+              <router-link :to="'/culinaries/' + item.id" class="product-card" v-for="item in items" :key="item.id">
                 <div class="product-card__img-wrapper">
                   <img :src="getPhotoUrl(item.images && item.images.length > 0 ? item.images[0] : null)" :alt="item.name" class="product-card__img" loading="lazy" />
                 </div>

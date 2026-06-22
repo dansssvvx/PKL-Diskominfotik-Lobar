@@ -48,6 +48,7 @@
           <span>Admin</span> / <span>{{ currentPageTitle }}</span>
         </div>
         <div class="admin-topbar__right">
+          <RouterLink to="/" class="btn btn-ghost btn-sm" style="margin-right: 12px;">← Back</RouterLink>
           <span class="badge badge-success">● System Online</span>
         </div>
       </header>

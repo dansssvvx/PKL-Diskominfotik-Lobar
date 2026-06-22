@@ -1,5 +1,5 @@
 <template>
-  <nav class="navbar" :class="{ 'navbar--solid': isScrolled }">
+  <nav class="navbar" :class="{ 'navbar--solid': isScrolled, 'navbar--dark-text': isMapPage }">
     <RouterLink to="/" class="navbar__logo">
       <img src="/Logo.png" alt="Lombok Barat" class="navbar__logo-img" @error="logoError = true" v-if="!logoError" />
       <span class="navbar__logo-fallback" v-else>🏛️</span>
@@ -117,7 +117,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { RouterLink, useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { notificationApi } from '@/api'
@@ -130,6 +130,7 @@ const isScrolled = ref(false)
 const userMenuOpen = ref(false)
 const notifOpen = ref(false)
 const logoError = ref(false)
+const isMapPage = computed(() => route.path === '/map')
 const unreadCount = ref(0)
 const notifications = ref<any[]>([])
 
@@ -242,6 +243,33 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll))
 .navbar__link--active { background: #fff; color: #050608; font-weight: 700; }
 
 .navbar__right { display: flex; align-items: center; gap: 10px; }
+
+/* Dark Text Override for Map View */
+.navbar--dark-text .navbar__pill {
+  background: rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.1);
+}
+.navbar--dark-text .navbar__link {
+  color: rgba(0,0,0,0.7);
+}
+.navbar--dark-text .navbar__link:hover {
+  color: #000; background: rgba(0,0,0,0.06);
+}
+.navbar--dark-text .navbar__link--active {
+  background: #000; color: #fff;
+}
+.navbar--dark-text .navbar__icon-btn,
+.navbar--dark-text .navbar__user {
+  background: rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.1);
+  color: #000;
+}
+.navbar--dark-text .navbar__icon-btn:hover,
+.navbar--dark-text .navbar__user:hover {
+  background: rgba(0,0,0,0.1);
+}
+.navbar--dark-text .navbar__chevron { color: #000; }
+
 
 .navbar__notif-container { position: relative; }
 

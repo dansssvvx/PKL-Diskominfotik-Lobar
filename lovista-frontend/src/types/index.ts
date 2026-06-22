@@ -472,7 +472,7 @@ export interface RegisterForm {
 }
 
 export interface BookingForm {
-  package_id: number
+  package: number
   start_date: string
   total_person: number
   special_request?: string
@@ -490,15 +490,12 @@ export interface HomestayBookingForm {
 }
 
 export interface VehicleRentalForm {
-  vehicle_id: number
+  vehicle: number
   start_date: string
   end_date: string
   driver_included: boolean
-  pickup_location?: string
-  dropoff_location?: string
   renter_name: string
   renter_phone: string
-  renter_id_number?: string
 }
 
 export interface AIRecommendationForm {

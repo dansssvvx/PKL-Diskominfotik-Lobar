@@ -207,20 +207,24 @@
               <div class="booking-card__body">
                 <div class="form-group">
                   <label class="form-label">Visit Date</label>
-                  <input type="date" class="form-input" v-model="bookingDate" />
+                  <input type="date" class="form-input" v-model="bookingDate" :min="todayDate" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">Visitors</label>
                   <input type="number" class="form-input" v-model="bookingPersons" min="1" placeholder="Number of people" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Vehicles</label>
+                  <input type="number" class="form-input" v-model="bookingVehicles" min="0" placeholder="Number of vehicles" />
                 </div>
                 <div class="booking-card__summary" v-if="bookingTotal > 0">
                   <div class="booking-card__summary-row">
                     <span>Ticket × {{ bookingPersons }}</span>
                     <span>Rp {{ formatPrice(Number(dest.ticket_price) * Number(bookingPersons)) }}</span>
                   </div>
-                  <div class="booking-card__summary-row">
-                    <span>Parking</span>
-                    <span>Rp {{ formatPrice(Number(dest.parking_fee)) }}</span>
+                  <div class="booking-card__summary-row" v-if="bookingVehicles > 0">
+                    <span>Parking × {{ bookingVehicles }}</span>
+                    <span>Rp {{ formatPrice(Number(dest.parking_fee) * bookingVehicles) }}</span>
                   </div>
                   <div class="divider"></div>
                   <div class="booking-card__summary-row booking-card__summary-total">
@@ -256,6 +260,64 @@
         <RouterLink to="/destinations" class="btn btn-primary" style="margin-top:16px">Back to Destinations</RouterLink>
       </div>
     </div>
+    <!-- E-Receipt Modal -->
+    <div class="receipt-modal-overlay" v-if="showReceipt" @click="showReceipt = false">
+      <div class="receipt-container" @click.stop id="receipt-content" style="background:#fff;color:#000;padding:32px;width:100%;max-width:500px;border-radius:12px;position:relative">
+        <div style="text-align:center;border-bottom:2px dashed #ccc;padding-bottom:16px;margin-bottom:16px">
+          <h2 style="font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:#2563eb;margin:0">LOVISTA</h2>
+          <p style="margin:4px 0 0;font-size:0.9rem;color:#666">E-Receipt - Tourism Destination Booking</p>
+        </div>
+        
+        <div style="margin-bottom:24px">
+          <div style="font-weight:bold;font-size:1.2rem;margin-bottom:4px">{{ dest.name }}</div>
+          <div style="font-size:0.9rem;color:#444">{{ dest.village }}, {{ dest.district }}</div>
+        </div>
+
+        <table style="width:100%;font-size:0.95rem;margin-bottom:24px;border-collapse:collapse">
+          <tr style="border-bottom:1px solid #eee">
+            <td style="padding:8px 0;color:#666">Visit Date</td>
+            <td style="padding:8px 0;text-align:right;font-weight:bold">{{ formatDate(bookingDate) }}</td>
+          </tr>
+          <tr style="border-bottom:1px solid #eee">
+            <td style="padding:8px 0;color:#666">Visitors</td>
+            <td style="padding:8px 0;text-align:right;font-weight:bold">{{ bookingPersons }} Person(s)</td>
+          </tr>
+          <tr style="border-bottom:1px solid #eee">
+            <td style="padding:8px 0;color:#666">Vehicles</td>
+            <td style="padding:8px 0;text-align:right;font-weight:bold">{{ bookingVehicles }} Vehicle(s)</td>
+          </tr>
+        </table>
+
+        <div style="background:#f8fafc;padding:16px;border-radius:8px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+            <span style="color:#666">Ticket (x{{ bookingPersons }})</span>
+            <span>Rp {{ formatPrice(Number(dest.ticket_price) * Number(bookingPersons)) }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:12px" v-if="bookingVehicles > 0">
+            <span style="color:#666">Parking (x{{ bookingVehicles }})</span>
+            <span>Rp {{ formatPrice(Number(dest.parking_fee) * bookingVehicles) }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;border-top:1px solid #cbd5e1;padding-top:12px;font-weight:bold;font-size:1.2rem;color:#0f172a">
+            <span>Total Paid</span>
+            <span>Rp {{ formatPrice(bookingTotal) }}</span>
+          </div>
+        </div>
+        
+        <div style="margin-top:24px;text-align:center">
+          <svg id="receipt-barcode"></svg>
+        </div>
+
+        <div style="margin-top:16px;text-align:center;font-size:0.8rem;color:#94a3b8">
+          This is an automatically generated receipt.<br>Please present this barcode upon arrival.
+        </div>
+        
+        <!-- Action Buttons (ignored when generating PDF) -->
+        <div data-html2canvas-ignore="true" style="margin-top:24px;display:flex;gap:12px">
+          <button class="btn btn-primary" style="flex:1" @click="downloadReceipt">Save as PDF</button>
+          <button class="btn btn-ghost" style="flex:1;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1" @click="showReceipt = false">Close</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -269,6 +331,10 @@ import { destinationApi } from '@/api'
 import TheNavbar from '@/components/layout/TheNavbar.vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+// @ts-ignore
+import html2pdf from 'html2pdf.js'
+// @ts-ignore
+import JsBarcode from 'jsbarcode'
 
 const route = useRoute()
 const router = useRouter()
@@ -279,8 +345,13 @@ const dest = computed(() => destStore.current)
 const isWishlisted = computed(() => dest.value ? destStore.isWishlisted(dest.value.id) : false)
 
 const bookingDate = ref('')
+const today = new Date()
+const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 const bookingPersons = ref(1)
+const bookingVehicles = ref(1)
 const writeReview = ref(false)
+const showReceipt = ref(false)
+const receiptId = ref('')
 const reviewForm = ref({ rating: 5, comment: '' })
 
 let map: L.Map | null = null
@@ -325,7 +396,8 @@ watch(() => dest.value, (newVal) => {
 
 const bookingTotal = computed(() => {
   if (!dest.value || !bookingPersons.value) return 0
-  return (Number(dest.value.ticket_price) * Number(bookingPersons.value)) + Number(dest.value.parking_fee)
+  const vehicles = bookingVehicles.value > 0 ? bookingVehicles.value : 0
+  return (Number(dest.value.ticket_price) * Number(bookingPersons.value)) + (Number(dest.value.parking_fee) * vehicles)
 })
 
 function formatPrice(val: number) { return val.toLocaleString('id-ID') }
@@ -370,6 +442,49 @@ async function submitReview() {
 function handleBooking() {
   if (!auth.isLoggedIn) { router.push('/login'); return }
   if (!bookingDate.value) { Swal.fire({ title: 'Notification', text: 'Please select a date', icon: 'info' }); return }
+  
+  if (bookingDate.value < todayDate) {
+    Swal.fire({ title: 'Error', text: 'Tanggal booking tidak boleh di masa lalu!', icon: 'error' });
+    return;
+  }
+  
+  Swal.fire({
+    title: 'Success!',
+    text: 'Booking berhasil diproses!',
+    icon: 'success',
+    confirmButtonText: 'Lihat E-Receipt'
+  }).then(() => {
+    receiptId.value = 'LV-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase()
+    showReceipt.value = true
+    nextTick(() => {
+      JsBarcode("#receipt-barcode", receiptId.value, {
+        format: "CODE128",
+        displayValue: true,
+        fontSize: 14,
+        height: 50,
+        margin: 0,
+        lineColor: "#0f172a"
+      })
+    })
+  })
+}
+
+function downloadReceipt() {
+  const element = document.getElementById('receipt-content')
+  if (!element || !dest.value) return
+  
+  const opt = {
+    margin: [10, 10, 10, 10],
+    filename: `LoVista-Booking-${dest.value.slug}-${Date.now()}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  }
+  
+  html2pdf().set(opt).from(element).save().then(() => {
+    Swal.fire({ title: 'Success', text: 'E-Receipt saved successfully!', icon: 'success' })
+    showReceipt.value = false
+  })
 }
 
 onMounted(() => {
@@ -495,5 +610,18 @@ onMounted(() => {
   .detail__info-grid { grid-template-columns: repeat(2,1fr); }
   .culinary__grid { grid-template-columns: 1fr; }
   .detail__sidebar { position: static; }
+}
+
+/* Receipt Modal Styles */
+.receipt-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
 }
 </style>

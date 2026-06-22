@@ -90,8 +90,6 @@
       <button class="image-modal__close" @click.stop="closeModal">×</button>
       <img :src="selectedImage" alt="Enlarged view" class="image-modal__img" @click.stop />
     </div>
-
-    <TheFooter />
   </div>
 </template>
 
@@ -101,7 +99,6 @@ import { useRoute } from 'vue-router'
 import { culinaryApi } from '@/api'
 import type { Culinary } from '@/types'
 import TheNavbar from '@/components/layout/TheNavbar.vue'
-import TheFooter from '@/components/layout/TheFooter.vue'
 
 const route = useRoute()
 const culinary = ref<Culinary | null>(null)

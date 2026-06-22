@@ -7,7 +7,7 @@ from .views import (
     TravelAgencyViewSet, VehicleViewSet, HomestayViewSet,
     HomestayRoomViewSet, NotificationViewSet, AdminViewSet,
     HomestayBookingViewSet, VehicleRentalViewSet, AIRecommendationViewSet,
-    ContributionViewSet, SettingViewSet
+    ContributionViewSet, SettingViewSet, WishlistViewSet
 )
 
 router = DefaultRouter()
@@ -31,6 +31,7 @@ router.register(r'vehicle-rentals', VehicleRentalViewSet)
 router.register(r'ai-recommendations', AIRecommendationViewSet)
 router.register(r'contributions', ContributionViewSet)
 router.register(r'settings', SettingViewSet)
+router.register(r'wishlist', WishlistViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),

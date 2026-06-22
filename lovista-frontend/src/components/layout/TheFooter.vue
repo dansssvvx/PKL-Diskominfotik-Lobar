@@ -47,8 +47,6 @@ const columns = [
     { label: 'AI Recommendation', to: '/ai-recommendation' },
     { label: 'Interactive Map', to: '/map' },
     { label: 'Online Booking', to: '/my-bookings' },
-    { label: 'Partner Dashboard', to: '/operator' },
-    { label: 'Admin Panel', to: '/admin' },
   ]},
   { title: 'Info', links: [
     { label: 'About LoVista', to: '/' },

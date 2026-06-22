@@ -93,12 +93,22 @@
             <form @submit.prevent="handleBooking" class="booking-form">
               <div class="form-group">
                 <label>Start Date</label>
-                <input type="date" v-model="form.start_date" required />
+                <input type="date" v-model="form.start_date" :min="todayDate" required />
               </div>
               
               <div class="form-group">
                 <label>End Date</label>
-                <input type="date" v-model="form.end_date" required />
+                <input type="date" v-model="form.end_date" :min="form.start_date || todayDate" required />
+              </div>
+
+              <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" v-model="form.renter_name" placeholder="Your full name" required />
+              </div>
+
+              <div class="form-group">
+                <label>Phone Number</label>
+                <input type="tel" v-model="form.renter_phone" placeholder="Your phone number" required />
               </div>
 
               <div class="form-group checkbox-group" v-if="vehicle.driver_rate > 0">
@@ -143,11 +153,69 @@
       <p>Loading vehicle details...</p>
     </div>
 
-    <!-- Error State -->
     <div class="container section error-state" v-else>
       <h2 class="text-red">Failed to load vehicle details.</h2>
       <p>It might have been removed or doesn't exist.</p>
       <RouterLink to="/" class="btn btn-primary mt-4">Return Home</RouterLink>
+    </div>
+
+    <!-- E-Receipt Modal -->
+    <div class="receipt-modal-overlay" v-if="showReceipt" @click="showReceipt = false">
+      <div class="receipt-container" @click.stop id="receipt-content" style="background:#fff;color:#000;padding:32px;width:100%;max-width:500px;border-radius:12px;position:relative">
+        <div style="text-align:center;border-bottom:2px dashed #ccc;padding-bottom:16px;margin-bottom:16px">
+          <h2 style="font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:#2563eb;margin:0">LOVISTA</h2>
+          <p style="margin:4px 0 0;font-size:0.9rem;color:#666">E-Receipt - Vehicle Rental</p>
+        </div>
+        
+        <div style="margin-bottom:24px">
+          <div style="font-weight:bold;font-size:1.2rem;margin-bottom:4px">{{ vehicle.brand }} {{ vehicle.model }}</div>
+          <div style="font-size:0.9rem;color:#444">{{ vehicle.plate_number }} • {{ vehicle.type.toUpperCase() }}</div>
+        </div>
+
+        <table style="width:100%;font-size:0.95rem;margin-bottom:24px;border-collapse:collapse">
+          <tr style="border-bottom:1px solid #eee">
+            <td style="padding:8px 0;color:#666">Rental Period</td>
+            <td style="padding:8px 0;text-align:right;font-weight:bold">{{ formatDate(form.start_date) }} - {{ formatDate(form.end_date) }}</td>
+          </tr>
+          <tr style="border-bottom:1px solid #eee">
+            <td style="padding:8px 0;color:#666">Total Days</td>
+            <td style="padding:8px 0;text-align:right;font-weight:bold">{{ totalDays }} Day(s)</td>
+          </tr>
+          <tr style="border-bottom:1px solid #eee">
+            <td style="padding:8px 0;color:#666">Driver</td>
+            <td style="padding:8px 0;text-align:right;font-weight:bold">{{ form.driver_included ? 'Included' : 'Not Included' }}</td>
+          </tr>
+        </table>
+
+        <div style="background:#f8fafc;padding:16px;border-radius:8px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+            <span style="color:#666">Daily Rate (x{{ totalDays }})</span>
+            <span>Rp {{ formatNumber(totalDays * vehicle.daily_rate) }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:12px" v-if="form.driver_included">
+            <span style="color:#666">Driver Rate (x{{ totalDays }})</span>
+            <span>Rp {{ formatNumber(totalDays * vehicle.driver_rate) }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;border-top:1px solid #cbd5e1;padding-top:12px;font-weight:bold;font-size:1.2rem;color:#0f172a">
+            <span>Total Paid</span>
+            <span>Rp {{ formatNumber(totalEstimate) }}</span>
+          </div>
+        </div>
+        
+        <div style="margin-top:24px;text-align:center">
+          <svg id="receipt-barcode"></svg>
+        </div>
+
+        <div style="margin-top:16px;text-align:center;font-size:0.8rem;color:#94a3b8">
+          This is an automatically generated receipt.<br>Please present this barcode upon pickup.
+        </div>
+        
+        <!-- Action Buttons (ignored when generating PDF) -->
+        <div data-html2canvas-ignore="true" style="margin-top:24px;display:flex;gap:12px">
+          <button class="btn btn-primary" style="flex:1" @click="downloadReceipt">Save as PDF</button>
+          <button class="btn btn-ghost" style="flex:1;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1" @click="showReceipt = false">Close</button>
+        </div>
+      </div>
     </div>
 
     <TheFooter />
@@ -156,12 +224,19 @@
 
 <script setup lang="ts">
 import Swal from 'sweetalert2'
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { vehicleApi, agencyApi } from '@/api'
+import { vehicleApi, agencyApi, bookingApi } from '@/api'
 import type { Vehicle, TravelAgency } from '@/types'
+import { useAuthStore } from '@/stores/auth'
 import TheNavbar from '@/components/layout/TheNavbar.vue'
 import TheFooter from '@/components/layout/TheFooter.vue'
+import html2pdf from 'html2pdf.js'
+import JsBarcode from 'jsbarcode'
+
+const auth = useAuthStore()
+const tzOffset = (new Date()).getTimezoneOffset() * 60000
+const todayDate = (new Date(Date.now() - tzOffset)).toISOString().split('T')[0]
 
 const route = useRoute()
 const router = useRouter()
@@ -172,7 +247,9 @@ const loading = ref(true)
 const form = ref({
   start_date: '',
   end_date: '',
-  driver_included: false
+  driver_included: false,
+  renter_name: auth.user?.fullname || '',
+  renter_phone: auth.user?.phone || ''
 })
 
 const getPhotoUrl = (path?: string) => {
@@ -204,8 +281,70 @@ const totalEstimate = computed(() => {
   return total
 })
 
-const handleBooking = () => {
-  Swal.fire({ title: 'Notification', text: `Booking initiated for ${vehicle.value?.brand} ${vehicle.value?.model}!\nTotal: Rp ${formatNumber(totalEstimate.value)}`, icon: 'info' })
+const showReceipt = ref(false)
+const receiptId = ref('')
+
+function formatDate(d: string) { return new Date(d).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }) }
+
+const handleBooking = async () => {
+  if (!auth.isLoggedIn) { router.push('/login'); return }
+  if (totalDays.value <= 0) { Swal.fire({ title: 'Error', text: 'Tanggal end_date harus setelah start_date', icon: 'error' }); return }
+  if (form.value.start_date < todayDate) {
+    Swal.fire({ title: 'Error', text: 'Tanggal rental tidak boleh di masa lalu!', icon: 'error' });
+    return;
+  }
+  
+  try {
+    const res = await bookingApi.rentalCreate({
+      vehicle: vehicle.value!.id,
+      start_date: form.value.start_date,
+      end_date: form.value.end_date,
+      driver_included: form.value.driver_included,
+      renter_name: form.value.renter_name,
+      renter_phone: form.value.renter_phone
+    })
+    
+    Swal.fire({
+      title: 'Success!',
+      text: 'Booking berhasil diproses!',
+      icon: 'success',
+      confirmButtonText: 'Lihat E-Receipt'
+    }).then(() => {
+      receiptId.value = res.data.rental_number || 'RNT-' + Date.now().toString(36).toUpperCase()
+      showReceipt.value = true
+      nextTick(() => {
+        JsBarcode("#receipt-barcode", receiptId.value, {
+          format: "CODE128",
+          displayValue: true,
+          fontSize: 14,
+          height: 50,
+          margin: 0,
+          lineColor: "#0f172a"
+        })
+      })
+    })
+  } catch (error: any) {
+    console.error(error)
+    Swal.fire({ title: 'Error', text: 'Gagal melakukan booking.', icon: 'error' })
+  }
+}
+
+function downloadReceipt() {
+  const element = document.getElementById('receipt-content')
+  if (!element || !vehicle.value) return
+  
+  const opt = {
+    margin: [10, 10, 10, 10],
+    filename: `LoVista-Rental-${vehicle.value.id}-${Date.now()}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  }
+  
+  html2pdf().set(opt).from(element).save().then(() => {
+    Swal.fire({ title: 'Success', text: 'E-Receipt saved successfully!', icon: 'success' })
+    showReceipt.value = false
+  })
 }
 
 onMounted(async () => {
@@ -429,7 +568,9 @@ onMounted(async () => {
   font-size: 0.9rem;
 }
 
-.form-group input[type="date"] {
+.form-group input[type="text"],
+.form-group input[type="date"],
+.form-group input[type="tel"] {
   width: 100%;
   padding: 12px;
   background: var(--dark2);
@@ -442,7 +583,23 @@ onMounted(async () => {
 .checkbox-group label {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  cursor: pointer;
+  background: var(--dark2);
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--w12);
+  transition: border-color 0.3s;
+}
+
+.checkbox-group label:hover {
+  border-color: var(--w40);
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--blue);
   cursor: pointer;
 }
 
@@ -486,5 +643,16 @@ onMounted(async () => {
   .vehicle-hero__grid { grid-template-columns: 1fr; gap: 40px; }
   .vehicle-content-layout { grid-template-columns: 1fr; gap: 40px; }
   .vehicle-summary h1 { font-size: 2.5rem; }
+}
+.receipt-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
 }
 </style>
