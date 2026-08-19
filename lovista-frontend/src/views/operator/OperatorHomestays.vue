@@ -115,17 +115,18 @@
           <button class="btn-close" @click="closeModal">×</button>
         </div>
         <form @submit.prevent="handleSubmit" class="modal-form">
-          <!-- Image Upload -->
-          <div class="image-upload-area" @click="triggerFileInput" @dragover.prevent @drop.prevent="handleDrop">
-            <input type="file" ref="fileInput" accept="image/*" class="hidden-input" @change="handleFileChange" />
-            <div v-if="imagePreview" class="image-preview-wrap">
-              <img :src="imagePreview" class="image-preview" />
-              <button type="button" class="img-remove-btn" @click.stop="clearImage">×</button>
-            </div>
-            <div v-else class="upload-placeholder">
-              <span>🏡</span>
-              <p>Click or drag to upload homestay photo</p>
-              <small>JPG, PNG, WEBP up to 5MB</small>
+          <!-- Image URL -->
+          <div class="form-group full-width">
+            <label class="form-label">Cover Image URL</label>
+            <input
+              v-model="form.main_image"
+              type="url"
+              class="form-input"
+              placeholder="https://example.com/homestay.jpg"
+              @input="imagePreview = form.main_image || null"
+            />
+            <div v-if="imagePreview" class="image-url-preview">
+              <img :src="imagePreview" @error="imagePreview = null" alt="Preview" />
             </div>
           </div>
 
@@ -153,6 +154,10 @@
             <div class="form-group">
               <label class="form-label">Total Rooms</label>
               <input v-model.number="form.total_rooms" type="number" min="1" class="form-input" />
+            </div>
+            <div class="form-group" v-if="!isEditing">
+              <label class="form-label">Price Per Night (Base)</label>
+              <input v-model.number="form.price_per_night" type="number" min="0" class="form-input" placeholder="e.g. 250000" />
             </div>
             <div class="form-group">
               <label class="form-label">Check-In Time</label>
@@ -269,6 +274,10 @@
                 <input v-model.number="roomForm.price_per_night" type="number" min="0" class="form-input" required />
               </div>
               <div class="form-group full-width">
+                <label class="form-label">Room Image URL</label>
+                <input v-model="roomForm.image" type="url" class="form-input" placeholder="https://example.com/room.jpg" />
+              </div>
+              <div class="form-group full-width">
                 <label class="form-label">Facilities (comma separated)</label>
                 <input v-model="roomFacilitiesInput" type="text" class="form-input" placeholder="e.g. AC, TV, Hot Water" />
               </div>
@@ -334,9 +343,7 @@ const showDeleteModal = ref(false)
 const isEditing = ref(false)
 const currentId = ref<number | null>(null)
 const deleteTarget = ref<Homestay | null>(null)
-const fileInput = ref<HTMLInputElement | null>(null)
 const imagePreview = ref<string | null>(null)
-const imageFile = ref<File | null>(null)
 const amenitiesInput = ref('')
 const selectedHomestay = ref<Homestay | null>(null)
 const editingRoomId = ref<number | null>(null)
@@ -361,12 +368,14 @@ const form = ref({
   district: '',
   phone: '',
   total_rooms: 1,
+  price_per_night: null as number | null,
   description: '',
   check_in_time: '14:00',
   check_out_time: '12:00',
   policies: '',
   latitude: null as number | null,
   longitude: null as number | null,
+  main_image: '',
   is_active: true,
 })
 
@@ -375,6 +384,7 @@ const roomForm = ref({
   room_type: '',
   capacity: 2,
   price_per_night: 0,
+  image: '',
   is_available: true,
 })
 
@@ -407,11 +417,11 @@ function openEditModal(h: Homestay) {
     total_rooms: h.total_rooms, description: h.description || '',
     check_in_time: h.check_in_time || '14:00', check_out_time: h.check_out_time || '12:00',
     policies: h.policies || '', latitude: h.latitude, longitude: h.longitude,
+    main_image: h.main_image || '',
     is_active: h.is_active,
   }
   amenitiesInput.value = h.amenities ? h.amenities.join(', ') : ''
-  imagePreview.value = h.main_image ? getPhotoUrl(h.main_image) : null
-  imageFile.value = null
+  imagePreview.value = h.main_image || null
   showModal.value = true
 }
 
@@ -420,31 +430,13 @@ function closeModal() { showModal.value = false; resetForm() }
 function resetForm() {
   form.value = {
     name: '', address: '', village: '', district: '', phone: '',
-    total_rooms: 1, description: '', check_in_time: '14:00',
-    check_out_time: '12:00', policies: '', latitude: null, longitude: null, is_active: true,
+    total_rooms: 1, price_per_night: null, description: '', check_in_time: '14:00',
+    check_out_time: '12:00', policies: '', latitude: null, longitude: null, main_image: '', is_active: true,
   }
-  amenitiesInput.value = ''; imagePreview.value = null; imageFile.value = null
+  amenitiesInput.value = ''; imagePreview.value = null
 }
 
-function triggerFileInput() { fileInput.value?.click() }
-function handleFileChange(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) setImageFile(file)
-}
-function handleDrop(e: DragEvent) {
-  const file = e.dataTransfer?.files?.[0]
-  if (file?.type.startsWith('image/')) setImageFile(file)
-}
-function setImageFile(file: File) {
-  imageFile.value = file
-  const reader = new FileReader()
-  reader.onload = (e) => { imagePreview.value = e.target?.result as string }
-  reader.readAsDataURL(file)
-}
-function clearImage() {
-  imagePreview.value = null; imageFile.value = null
-  if (fileInput.value) fileInput.value.value = ''
-}
+function triggerFileInput() { /* no longer used */ }
 
 async function handleSubmit() {
   submitting.value = true
@@ -453,27 +445,12 @@ async function handleSubmit() {
     const payload: any = { ...form.value, amenities }
     if (!payload.latitude) delete payload.latitude
     if (!payload.longitude) delete payload.longitude
+    if (!payload.main_image) delete payload.main_image
 
-    if (imageFile.value) {
-      const fd = new FormData()
-      Object.entries(payload).forEach(([k, v]) => {
-        if (v !== null && v !== undefined) {
-          if (Array.isArray(v)) fd.append(k, JSON.stringify(v))
-          else fd.append(k, String(v))
-        }
-      })
-      fd.append('main_image', imageFile.value)
-      if (isEditing.value && currentId.value) {
-        await homestayApi.update(currentId.value, fd as any)
-      } else {
-        await homestayApi.create(fd as any)
-      }
+    if (isEditing.value && currentId.value) {
+      await homestayApi.update(currentId.value, payload)
     } else {
-      if (isEditing.value && currentId.value) {
-        await homestayApi.update(currentId.value, payload)
-      } else {
-        await homestayApi.create(payload)
-      }
+      await homestayApi.create(payload)
     }
     showModal.value = false; fetchData()
   } catch (err: any) {
@@ -497,7 +474,7 @@ async function openRoomsModal(h: Homestay) {
 
 function openAddRoomModal() {
   editingRoomId.value = null
-  roomForm.value = { room_number: '', room_type: '', capacity: 2, price_per_night: 0, is_available: true }
+  roomForm.value = { room_number: '', room_type: '', capacity: 2, price_per_night: 0, image: '', is_available: true }
   roomFacilitiesInput.value = ''
   showRoomForm.value = true
 }
@@ -509,6 +486,7 @@ function editRoom(r: HomestayRoom) {
     room_type: r.room_type || '',
     capacity: r.capacity,
     price_per_night: Number(r.price_per_night),
+    image: r.image || '',
     is_available: r.is_available,
   }
   roomFacilitiesInput.value = r.facilities ? r.facilities.join(', ') : ''
@@ -590,13 +568,8 @@ onMounted(fetchData)
 .pagination { display: flex; align-items: center; justify-content: center; gap: 16px; font-size: 0.9rem; color: var(--w70); }
 .mt-4 { margin-top: 24px; }
 
-.image-upload-area { width: 100%; min-height: 160px; border: 2px dashed var(--w15); border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all .2s; margin-bottom: 24px; position: relative; overflow: hidden; }
-.image-upload-area:hover { border-color: var(--blue); background: rgba(26,143,255,.05); }
-.hidden-input { display: none; }
-.upload-placeholder { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--w40); text-align: center; padding: 24px; font-size: .9rem; }
-.image-preview-wrap { width: 100%; height: 160px; position: relative; }
-.image-preview { width: 100%; height: 100%; object-fit: cover; }
-.img-remove-btn { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; background: rgba(0,0,0,.7); border: none; border-radius: 50%; color: #fff; font-size: 1rem; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.image-url-preview { margin-top: 12px; width: 100%; height: 180px; border-radius: 10px; overflow: hidden; border: 1px solid var(--w12); }
+.image-url-preview img { width: 100%; height: 100%; object-fit: cover; }
 
 .toggle-group { display: flex; gap: 24px; margin-top: 8px; }
 .toggle-label { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: .9rem; color: var(--w70); }

@@ -76,6 +76,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Homestay — LoVista' }
   },
   {
+    path: '/homestays/:id',
+    component: () => import('@/views/HomestayDetailView.vue'),
+    name: 'homestay-detail',
+    meta: { title: 'Homestay Detail — LoVista' }
+  },
+  {
     path: '/ai-recommendation',
     component: () => import('@/views/AIRecommendationView.vue'),
     name: 'ai-recommendation',
@@ -192,6 +198,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/AdminPackages.vue'),
         name: 'admin-packages',
         meta: { title: 'Manage Packages — LoVista' }
+      },
+      {
+        path: 'homestays',
+        component: () => import('@/views/admin/AdminHomestays.vue'),
+        name: 'admin-homestays',
+        meta: { title: 'Manage Homestays — LoVista' }
       },
       {
         path: 'culture',

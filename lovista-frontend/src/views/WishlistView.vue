@@ -1,6 +1,5 @@
 <template>
   <div class="page-wrapper">
-    <TheNavbar />
     
     <div class="wishlist-container container">
       <div class="page-header">
@@ -44,8 +43,6 @@
         </div>
       </div>
     </div>
-
-    <TheFooter />
   </div>
 </template>
 

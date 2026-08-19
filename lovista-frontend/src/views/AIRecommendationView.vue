@@ -1,6 +1,5 @@
 <template>
   <div class="page-wrapper">
-    <TheNavbar />
     
     <div class="ai-container container">
       <div class="header-section text-center">

@@ -479,7 +479,7 @@ export interface BookingForm {
 }
 
 export interface HomestayBookingForm {
-  room_id: number
+  room: number
   check_in: string
   check_out: string
   guest_name: string

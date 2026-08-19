@@ -1,6 +1,5 @@
 <template>
   <div class="detail-page">
-    <TheNavbar />
 
     <div v-if="destStore.loading" class="page-loader" style="min-height:100vh">
       <div class="spinner"></div> Loading...

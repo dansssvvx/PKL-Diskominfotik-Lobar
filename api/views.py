@@ -31,6 +31,26 @@ class HomestayBookingViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user)
 
+    def perform_create(self, serializer):
+        import uuid
+        room = serializer.validated_data['room']
+        check_in = serializer.validated_data['check_in']
+        check_out = serializer.validated_data['check_out']
+        
+        diff = check_out - check_in
+        total_nights = diff.days
+        if total_nights < 1:
+            total_nights = 1
+            
+        total_price = room.price_per_night * total_nights
+        booking_number = f"HSB-{uuid.uuid4().hex[:8].upper()}"
+        
+        serializer.save(
+            user=self.request.user,
+            booking_number=booking_number,
+            total_price=total_price
+        )
+
 class VehicleRentalViewSet(viewsets.ModelViewSet):
     queryset = VehicleRental.objects.all()
     serializer_class = VehicleRentalSerializer
@@ -252,10 +272,34 @@ class UserViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    @action(detail=False, methods=['get', 'patch'], permission_classes=[permissions.IsAuthenticated])
     def me(self, request):
-        serializer = self.get_serializer(request.user)
-        return Response(serializer.data)
+        if request.method == 'GET':
+            serializer = self.get_serializer(request.user)
+            return Response(serializer.data)
+        # PATCH - update profile fields
+        allowed = ['fullname', 'phone', 'email']
+        data = {k: v for k, v in request.data.items() if k in allowed}
+        serializer = self.get_serializer(request.user, data=data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def change_password(self, request):
+        user = request.user
+        old_password = request.data.get('old_password')
+        new_password = request.data.get('new_password')
+        if not old_password or not new_password:
+            return Response({'detail': 'Both old_password and new_password are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not user.check_password(old_password):
+            return Response({'old_password': ['Current password is incorrect.']}, status=status.HTTP_400_BAD_REQUEST)
+        if len(new_password) < 8:
+            return Response({'new_password': ['Password must be at least 8 characters.']}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(new_password)
+        user.save()
+        return Response({'detail': 'Password changed successfully.'})
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated], 
             parser_classes=[parsers.MultiPartParser, parsers.FormParser])
@@ -280,6 +324,7 @@ class UserViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class DestinationCategoryViewSet(viewsets.ModelViewSet):
     queryset = DestinationCategory.objects.all()
@@ -620,7 +665,7 @@ class TravelAgencyViewSet(viewsets.ModelViewSet):
         )['total'] or 0
 
         # Homestay bookings for homestays owned by this agency's user
-        hs_bookings = HomestayBooking.objects.filter(room__homestay__user=request.user)
+        hs_bookings = HomestayBooking.objects.filter(room__homestay__owner=request.user)
         hs_revenue = hs_bookings.filter(payment_status='paid').aggregate(
             total=Sum('total_price')
         )['total'] or 0
@@ -643,7 +688,7 @@ class TravelAgencyViewSet(viewsets.ModelViewSet):
             'total_revenue': float(pkg_revenue) + float(hs_revenue) + float(veh_revenue),
             'active_packages': TourPackage.objects.filter(agency=agency, is_active=True).count(),
             'active_vehicles': Vehicle.objects.filter(agency=agency, is_active=True).count(),
-            'active_homestays': Homestay.objects.filter(user=request.user, is_active=True).count(),
+            'active_homestays': Homestay.objects.filter(owner=request.user, is_active=True).count(),
         }
         return Response(data)
 
@@ -672,7 +717,7 @@ class TravelAgencyViewSet(viewsets.ModelViewSet):
     def me_homestay_bookings(self, request):
         """Homestay bookings for homestays belonging to this operator."""
         qs = HomestayBooking.objects.filter(
-            room__homestay__user=request.user
+            room__homestay__owner=request.user
         ).order_by('-created_at')
         status_filter = request.query_params.get('status')
         if status_filter:
@@ -784,6 +829,34 @@ class HomestayViewSet(viewsets.ModelViewSet):
     queryset = Homestay.objects.all()
     serializer_class = HomestaySerializer
 
+    def perform_create(self, serializer):
+        """Auto-assign owner from the authenticated operator and create default room if price provided."""
+        price_per_night = serializer.validated_data.pop('price_per_night', None)
+        homestay = serializer.save(owner=self.request.user)
+        if price_per_night:
+            HomestayRoom.objects.create(
+                homestay=homestay,
+                room_number="Default Room",
+                room_type="Standard",
+                capacity=2,
+                price_per_night=price_per_night,
+                is_available=True
+            )
+
+    def get_queryset(self):
+        qs = self.queryset
+        user = self.request.user
+        
+        if user.is_authenticated and not user.is_staff:
+            if getattr(user, 'role', None) and user.role.name == 'operator':
+                qs = qs.filter(owner=user)
+            else:
+                qs = qs.filter(is_active=True, is_verified=True)
+        elif not user.is_staff:
+            qs = qs.filter(is_active=True, is_verified=True)
+            
+        return qs.order_by('-created_at')
+
 class HomestayRoomViewSet(viewsets.ModelViewSet):
     queryset = HomestayRoom.objects.all()
     serializer_class = HomestayRoomSerializer
@@ -843,6 +916,7 @@ class AdminViewSet(viewsets.GenericViewSet):
             'total_bookings': Booking.objects.count() + HomestayBooking.objects.count() + VehicleRental.objects.count(),
             'total_revenue': total_revenue,
             'total_vehicles': Vehicle.objects.count(),
+            'total_homestays': Homestay.objects.count(),
             'pending_contributions': Contribution.objects.filter(status='pending').count(),
             'active_operators': User.objects.filter(role_id=2, is_active=True).count()
         }

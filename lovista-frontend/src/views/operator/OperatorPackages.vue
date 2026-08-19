@@ -111,17 +111,18 @@
           <button class="btn-close" @click="closeModal">×</button>
         </div>
         <form @submit.prevent="handleSubmit" class="modal-form">
-          <!-- Image Upload -->
-          <div class="image-upload-area" @click="triggerFileInput" @dragover.prevent @drop.prevent="handleDrop">
-            <input type="file" ref="fileInput" accept="image/*" class="hidden-input" @change="handleFileChange" />
-            <div v-if="imagePreview" class="image-preview-wrap">
-              <img :src="imagePreview" class="image-preview" />
-              <button type="button" class="img-remove-btn" @click.stop="clearImage">×</button>
-            </div>
-            <div v-else class="upload-placeholder">
-              <span class="upload-icon">📸</span>
-              <p>Click or drag to upload package photo</p>
-              <small>JPG, PNG, WEBP up to 5MB</small>
+          <!-- Image URL -->
+          <div class="form-group full-width">
+            <label class="form-label">Cover Image URL</label>
+            <input
+              v-model="form.main_image"
+              type="url"
+              class="form-input"
+              placeholder="https://example.com/cover.jpg"
+              @input="imagePreview = form.main_image || null"
+            />
+            <div v-if="imagePreview" class="image-url-preview">
+              <img :src="imagePreview" @error="imagePreview = null" alt="Preview" />
             </div>
           </div>
 
@@ -230,9 +231,7 @@ const showDeleteModal = ref(false)
 const isEditing = ref(false)
 const currentSlug = ref<string | null>(null)
 const deleteTarget = ref<TourPackage | null>(null)
-const fileInput = ref<HTMLInputElement | null>(null)
 const imagePreview = ref<string | null>(null)
-const imageFile = ref<File | null>(null)
 
 const packages = ref<TourPackage[]>([])
 const filters = ref({ search: '', is_active: '', page: 1 })
@@ -303,8 +302,7 @@ function openEditModal(pkg: TourPackage) {
     is_active: pkg.is_active,
     is_featured: pkg.is_featured,
   }
-  imagePreview.value = pkg.main_image ? getPhotoUrl(pkg.main_image) : null
-  imageFile.value = null
+  imagePreview.value = pkg.main_image || null
   showModal.value = true
 }
 
@@ -322,66 +320,22 @@ function resetForm() {
     main_image: '', is_active: true, is_featured: false,
   }
   imagePreview.value = null
-  imageFile.value = null
-}
-
-function triggerFileInput() {
-  fileInput.value?.click()
-}
-
-function handleFileChange(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) setImageFile(file)
-}
-
-function handleDrop(e: DragEvent) {
-  const file = e.dataTransfer?.files?.[0]
-  if (file && file.type.startsWith('image/')) setImageFile(file)
-}
-
-function setImageFile(file: File) {
-  imageFile.value = file
-  const reader = new FileReader()
-  reader.onload = (e) => { imagePreview.value = e.target?.result as string }
-  reader.readAsDataURL(file)
-}
-
-function clearImage() {
-  imagePreview.value = null
-  imageFile.value = null
-  form.value.main_image = ''
-  if (fileInput.value) fileInput.value.value = ''
 }
 
 async function handleSubmit() {
   submitting.value = true
   try {
-    // Build multipart form data if there's a file
-    let payload: any = { ...form.value }
+    const payload: any = { ...form.value }
     if (!payload.max_person) delete payload.max_person
+    if (!payload.main_image) delete payload.main_image
 
     // Generate slug from name
     const slug = form.value.name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '')
 
-    if (imageFile.value) {
-      const fd = new FormData()
-      Object.entries(payload).forEach(([k, v]) => {
-        if (v !== null && v !== undefined) fd.append(k, String(v))
-      })
-      fd.append('main_image', imageFile.value)
-      fd.append('slug', slug)
-
-      if (isEditing.value && currentSlug.value) {
-        await packageApi.update(currentSlug.value, fd as any)
-      } else {
-        await packageApi.create(fd as any)
-      }
+    if (isEditing.value && currentSlug.value) {
+      await packageApi.update(currentSlug.value, { ...payload, slug })
     } else {
-      if (isEditing.value && currentSlug.value) {
-        await packageApi.update(currentSlug.value, { ...payload, slug })
-      } else {
-        await packageApi.create({ ...payload, slug })
-      }
+      await packageApi.create({ ...payload, slug })
     }
 
     showModal.value = false
@@ -461,24 +415,19 @@ onMounted(fetchData)
 .pagination { display: flex; align-items: center; justify-content: center; gap: 16px; font-size: 0.9rem; color: var(--w70); }
 .mt-4 { margin-top: 24px; }
 
-/* Upload area */
-.image-upload-area {
-  width: 100%; min-height: 180px; border: 2px dashed var(--w15); border-radius: 12px;
-  display: flex; align-items: center; justify-content: center; cursor: pointer;
-  transition: all .2s; margin-bottom: 24px; position: relative; overflow: hidden;
+/* Image URL Preview */
+.image-url-preview {
+  margin-top: 12px;
+  width: 100%;
+  height: 180px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--w12);
 }
-.image-upload-area:hover { border-color: var(--blue); background: rgba(26,143,255,.05); }
-.hidden-input { display: none; }
-.upload-placeholder { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--w40); text-align: center; padding: 24px; }
-.upload-icon { font-size: 2rem; }
-.upload-placeholder p { font-size: .9rem; }
-.upload-placeholder small { font-size: .75rem; }
-.image-preview-wrap { width: 100%; height: 180px; position: relative; }
-.image-preview { width: 100%; height: 100%; object-fit: cover; }
-.img-remove-btn {
-  position: absolute; top: 8px; right: 8px; width: 28px; height: 28px;
-  background: rgba(0,0,0,.7); border: none; border-radius: 50%; color: #fff;
-  font-size: 1rem; display: flex; align-items: center; justify-content: center; cursor: pointer;
+.image-url-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* Toggle */

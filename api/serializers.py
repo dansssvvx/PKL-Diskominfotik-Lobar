@@ -114,6 +114,10 @@ class TourPackageSerializer(serializers.ModelSerializer):
     class Meta:
         model = TourPackage
         fields = '__all__'
+        extra_kwargs = {
+            'agency': {'required': False, 'allow_null': True},
+            'main_image': {'required': False, 'allow_null': True},
+        }
 
 class BookingSerializer(serializers.ModelSerializer):
     package_name = serializers.ReadOnlyField(source='package.name')
@@ -133,12 +137,32 @@ class VehicleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vehicle
         fields = '__all__'
+        extra_kwargs = {
+            'agency': {'required': False, 'allow_null': True, 'read_only': False},
+            'image': {'required': False, 'allow_null': True},
+        }
 
 class HomestaySerializer(serializers.ModelSerializer):
     owner_name = serializers.ReadOnlyField(source='owner.fullname')
+    starting_price = serializers.SerializerMethodField()
+    rooms = serializers.SerializerMethodField()
+    price_per_night = serializers.DecimalField(max_digits=10, decimal_places=2, write_only=True, required=False)
+
     class Meta:
         model = Homestay
         fields = '__all__'
+        extra_kwargs = {
+            'owner': {'required': False, 'allow_null': True},
+            'main_image': {'required': False, 'allow_null': True},
+        }
+
+    def get_starting_price(self, obj):
+        from django.db.models import Min
+        min_price = obj.rooms.aggregate(Min('price_per_night'))['price_per_night__min']
+        return min_price or 0
+
+    def get_rooms(self, obj):
+        return HomestayRoomSerializer(obj.rooms.all(), many=True).data
 
 class HomestayRoomSerializer(serializers.ModelSerializer):
     homestay_name = serializers.ReadOnlyField(source='homestay.name')
@@ -164,6 +188,7 @@ class HomestayBookingSerializer(serializers.ModelSerializer):
     class Meta:
         model = HomestayBooking
         fields = '__all__'
+        read_only_fields = ('booking_number', 'user', 'total_price', 'status', 'payment_status', 'payment_proof', 'notes')
 
 class VehicleRentalSerializer(serializers.ModelSerializer):
     vehicle_name = serializers.ReadOnlyField(source='vehicle.model')

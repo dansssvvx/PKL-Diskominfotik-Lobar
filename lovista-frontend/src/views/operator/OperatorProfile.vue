@@ -12,14 +12,12 @@
     </div>
 
     <div class="profile-grid" v-if="!loading">
-      <!-- Left: Agency Profile -->
+      <!-- Left: Agency Preview Card + Bank Account -->
       <div class="profile-left">
         <!-- Agency Card -->
         <div class="card profile-card">
           <div class="agency-logo-wrap">
             <img :src="getPhotoUrl(agency?.logo)" class="agency-logo" @error="handleImgError" />
-            <button class="logo-upload-btn" @click="triggerLogoInput" title="Change Logo">📸</button>
-            <input type="file" ref="logoInput" accept="image/*" class="hidden-input" @change="handleLogoChange" />
           </div>
           <div class="agency-info">
             <h2 class="agency-name">{{ agency?.business_name || 'Your Agency' }}</h2>
@@ -60,15 +58,29 @@
         </div>
       </div>
 
-      <!-- Right: Edit Forms -->
+      <!-- Right: Edit Agency Form -->
       <div class="profile-right">
-        <!-- Edit Agency Info -->
         <div class="card section-card">
           <div class="section-header">
             <h3 class="section-title">Agency Information</h3>
           </div>
           <form @submit.prevent="saveAgency" class="form-section">
             <div class="form-grid">
+              <!-- Logo URL -->
+              <div class="form-group full-width">
+                <label class="form-label">Logo URL</label>
+                <input
+                  v-model="agencyForm.logo"
+                  type="url"
+                  class="form-input"
+                  placeholder="https://example.com/logo.png"
+                  @input="logoPreview = agencyForm.logo || null"
+                />
+                <div v-if="logoPreview" class="logo-url-preview">
+                  <img :src="logoPreview" @error="logoPreview = null" alt="Logo Preview" />
+                </div>
+              </div>
+
               <div class="form-group full-width">
                 <label class="form-label">Business Name *</label>
                 <input v-model="agencyForm.business_name" type="text" class="form-input" placeholder="Your agency name" required />
@@ -102,92 +114,6 @@
             </div>
             <div class="success-msg" v-if="agencySuccess">✅ Agency information updated successfully!</div>
             <div class="error-msg" v-if="agencyError">❌ {{ agencyError }}</div>
-          </form>
-        </div>
-
-        <!-- Edit Personal Account -->
-        <div class="card section-card">
-          <div class="section-header">
-            <h3 class="section-title">Personal Account</h3>
-          </div>
-          <div class="account-info-row">
-            <div class="account-avatar" @click="triggerPhotoInput">
-              <img v-if="auth.user?.profile_photo" :src="getPhotoUrl(auth.user.profile_photo)" class="avatar-img" @error="handleImgError" />
-              <div v-else class="avatar-initials">{{ auth.user?.fullname?.charAt(0) }}</div>
-              <div class="avatar-overlay">📸</div>
-              <input type="file" ref="photoInput" accept="image/*" class="hidden-input" @change="handlePhotoChange" />
-            </div>
-            <div class="account-meta">
-              <div class="account-name">{{ auth.user?.fullname }}</div>
-              <div class="account-email">{{ auth.user?.email }}</div>
-              <div class="account-role badge badge-blue">Operator</div>
-            </div>
-          </div>
-
-          <form @submit.prevent="saveProfile" class="form-section">
-            <div class="form-grid">
-              <div class="form-group full-width">
-                <label class="form-label">Full Name *</label>
-                <input v-model="profileForm.fullname" type="text" class="form-input" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Email *</label>
-                <input v-model="profileForm.email" type="email" class="form-input" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Phone</label>
-                <input v-model="profileForm.phone" type="text" class="form-input" placeholder="+62..." />
-              </div>
-            </div>
-            <div class="form-actions">
-              <button type="submit" class="btn btn-primary" :disabled="savingProfile">
-                <span v-if="savingProfile" class="btn-spinner"></span>
-                {{ savingProfile ? 'Saving...' : 'Save Profile' }}
-              </button>
-            </div>
-            <div class="success-msg" v-if="profileSuccess">✅ Profile updated successfully!</div>
-            <div class="error-msg" v-if="profileError">❌ {{ profileError }}</div>
-          </form>
-        </div>
-
-        <!-- Change Password -->
-        <div class="card section-card">
-          <div class="section-header">
-            <h3 class="section-title">Change Password</h3>
-          </div>
-          <form @submit.prevent="changePassword" class="form-section">
-            <div class="form-group">
-              <label class="form-label">Current Password *</label>
-              <div class="password-field">
-                <input v-model="passwordForm.old_password" :type="showOldPwd ? 'text' : 'password'" class="form-input" required placeholder="Your current password" />
-                <button type="button" class="pwd-toggle" @click="showOldPwd = !showOldPwd">{{ showOldPwd ? '🙈' : '👁️' }}</button>
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">New Password *</label>
-              <div class="password-field">
-                <input v-model="passwordForm.new_password" :type="showNewPwd ? 'text' : 'password'" class="form-input" required placeholder="At least 8 characters" minlength="8" />
-                <button type="button" class="pwd-toggle" @click="showNewPwd = !showNewPwd">{{ showNewPwd ? '🙈' : '👁️' }}</button>
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Confirm New Password *</label>
-              <div class="password-field">
-                <input v-model="passwordForm.confirm_password" :type="showConfirmPwd ? 'text' : 'password'" class="form-input" required placeholder="Repeat new password" />
-                <button type="button" class="pwd-toggle" @click="showConfirmPwd = !showConfirmPwd">{{ showConfirmPwd ? '🙈' : '👁️' }}</button>
-              </div>
-              <div class="form-error" v-if="passwordForm.new_password && passwordForm.confirm_password && passwordForm.new_password !== passwordForm.confirm_password">
-                Passwords do not match
-              </div>
-            </div>
-            <div class="form-actions">
-              <button type="submit" class="btn btn-primary" :disabled="savingPwd || passwordForm.new_password !== passwordForm.confirm_password">
-                <span v-if="savingPwd" class="btn-spinner"></span>
-                {{ savingPwd ? 'Changing...' : 'Change Password' }}
-              </button>
-            </div>
-            <div class="success-msg" v-if="pwdSuccess">✅ Password changed successfully!</div>
-            <div class="error-msg" v-if="pwdError">❌ {{ pwdError }}</div>
           </form>
         </div>
       </div>
@@ -234,18 +160,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/auth'
-import { agencyApi, authApi } from '@/api'
-import api from '@/api'
+import { agencyApi } from '@/api'
 import type { TravelAgency } from '@/types'
 
 const BASE_URL = 'http://127.0.0.1:8000'
 
-const auth = useAuthStore()
 const loading = ref(true)
 const agency = ref<TravelAgency | null>(null)
-const logoInput = ref<HTMLInputElement | null>(null)
-const photoInput = ref<HTMLInputElement | null>(null)
+const logoPreview = ref<string | null>(null)
 
 // Agency form
 const savingAgency = ref(false)
@@ -258,22 +180,8 @@ const agencyForm = ref({
   email: '',
   address: '',
   description: '',
+  logo: '',
 })
-
-// Profile form
-const savingProfile = ref(false)
-const profileSuccess = ref(false)
-const profileError = ref('')
-const profileForm = ref({ fullname: '', email: '', phone: '' })
-
-// Password form
-const savingPwd = ref(false)
-const pwdSuccess = ref(false)
-const pwdError = ref('')
-const showOldPwd = ref(false)
-const showNewPwd = ref(false)
-const showConfirmPwd = ref(false)
-const passwordForm = ref({ old_password: '', new_password: '', confirm_password: '' })
 
 // Bank modal
 const showBankModal = ref(false)
@@ -283,12 +191,9 @@ const bankForm = ref({ bank_name: '', account_number: '', account_holder: '' })
 async function loadAll() {
   loading.value = true
   try {
-    const [agencyRes] = await Promise.allSettled([agencyApi.me()])
-    if (agencyRes.status === 'fulfilled') {
-      agency.value = agencyRes.value.data
-      fillAgencyForm(agency.value)
-    }
-    if (auth.user) fillProfileForm()
+    const res = await agencyApi.me()
+    agency.value = res.data
+    fillAgencyForm(res.data)
   } catch {}
   finally { loading.value = false }
 }
@@ -301,17 +206,11 @@ function fillAgencyForm(a: TravelAgency) {
     email: a.email || '',
     address: a.address || '',
     description: a.description || '',
+    logo: a.logo || '',
   }
+  logoPreview.value = a.logo || null
   if (a.bank_account) {
     bankForm.value = { ...a.bank_account }
-  }
-}
-
-function fillProfileForm() {
-  profileForm.value = {
-    fullname: auth.user?.fullname || '',
-    email: auth.user?.email || '',
-    phone: auth.user?.phone || '',
   }
 }
 
@@ -320,48 +219,22 @@ async function saveAgency() {
   agencySuccess.value = false
   agencyError.value = ''
   try {
-    const res = await agencyApi.update(agencyForm.value)
+    const payload: any = { ...agencyForm.value }
+    if (!payload.logo) delete payload.logo
+    const res = await agencyApi.update(payload)
     agency.value = res.data
+    logoPreview.value = res.data.logo || null
     agencySuccess.value = true
     setTimeout(() => { agencySuccess.value = false }, 3000)
   } catch (err: any) {
-    agencyError.value = err.response?.data?.detail || 'Failed to save agency info.'
+    const errData = err.response?.data
+    if (typeof errData === 'object') {
+      agencyError.value = Object.values(errData).flat().join(', ')
+    } else {
+      agencyError.value = errData?.detail || 'Failed to save agency info.'
+    }
     setTimeout(() => { agencyError.value = '' }, 4000)
   } finally { savingAgency.value = false }
-}
-
-async function saveProfile() {
-  savingProfile.value = true
-  profileSuccess.value = false
-  profileError.value = ''
-  try {
-    await api.patch('/users/me/', profileForm.value)
-    await auth.fetchMe()
-    profileSuccess.value = true
-    setTimeout(() => { profileSuccess.value = false }, 3000)
-  } catch (err: any) {
-    profileError.value = err.response?.data?.detail || 'Failed to update profile.'
-    setTimeout(() => { profileError.value = '' }, 4000)
-  } finally { savingProfile.value = false }
-}
-
-async function changePassword() {
-  if (passwordForm.value.new_password !== passwordForm.value.confirm_password) return
-  savingPwd.value = true
-  pwdSuccess.value = false
-  pwdError.value = ''
-  try {
-    await api.post('/users/change-password/', {
-      old_password: passwordForm.value.old_password,
-      new_password: passwordForm.value.new_password,
-    })
-    passwordForm.value = { old_password: '', new_password: '', confirm_password: '' }
-    pwdSuccess.value = true
-    setTimeout(() => { pwdSuccess.value = false }, 3000)
-  } catch (err: any) {
-    pwdError.value = err.response?.data?.detail || err.response?.data?.old_password?.[0] || 'Failed to change password.'
-    setTimeout(() => { pwdError.value = '' }, 4000)
-  } finally { savingPwd.value = false }
 }
 
 async function saveBankAccount() {
@@ -373,29 +246,6 @@ async function saveBankAccount() {
   } catch (err: any) {
     alert(err.response?.data?.detail || 'Failed to save bank account.')
   } finally { savingBank.value = false }
-}
-
-function triggerLogoInput() { logoInput.value?.click() }
-function triggerPhotoInput() { photoInput.value?.click() }
-
-async function handleLogoChange(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  try {
-    const fd = new FormData()
-    fd.append('logo', file)
-    const res = await api.patch('/agencies/me/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-    if (agency.value) agency.value.logo = res.data.logo
-  } catch { alert('Failed to upload logo.') }
-}
-
-async function handlePhotoChange(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  try {
-    await authApi.uploadPhoto(file)
-    await auth.fetchMe()
-  } catch { alert('Failed to upload photo.') }
 }
 
 function getPhotoUrl(path?: string | null) {
@@ -419,14 +269,8 @@ onMounted(loadAll)
 /* Left panel */
 .profile-left { display: flex; flex-direction: column; gap: 20px; }
 .profile-card { padding: 24px; text-align: center; }
-.agency-logo-wrap { position: relative; width: 96px; margin: 0 auto 16px; }
+.agency-logo-wrap { width: 96px; margin: 0 auto 16px; }
 .agency-logo { width: 96px; height: 96px; border-radius: 16px; object-fit: cover; border: 2px solid var(--w08); }
-.logo-upload-btn {
-  position: absolute; bottom: -8px; right: -8px;
-  width: 28px; height: 28px; background: var(--blue); border: 2px solid var(--dark2);
-  border-radius: 50%; font-size: .8rem; display: flex; align-items: center; justify-content: center; cursor: pointer;
-}
-.hidden-input { display: none; }
 .agency-name { font-family: 'Barlow Condensed', sans-serif; font-size: 1.4rem; font-weight: 800; font-style: italic; margin-bottom: 12px; }
 .agency-license, .agency-email, .agency-phone, .agency-address {
   font-size: .82rem; color: var(--w40); margin-bottom: 4px; text-align: left;
@@ -451,26 +295,24 @@ onMounted(loadAll)
 .form-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; }
 .full-width { grid-column: span 2; }
 .form-label { display: block; font-size: .72rem; font-weight: 600; color: var(--w40); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 6px; }
-.form-error { font-size: .75rem; color: var(--danger); margin-top: 4px; }
 .form-actions { margin-top: 16px; }
 .success-msg { margin-top: 10px; font-size: .85rem; color: #4ade80; }
 .error-msg { margin-top: 10px; font-size: .85rem; color: #f87171; }
 
-/* Account avatar */
-.account-info-row { display: flex; align-items: center; gap: 16px; padding: 16px 0; margin-bottom: 8px; border-bottom: 1px solid var(--w08); }
-.account-avatar { position: relative; width: 64px; height: 64px; border-radius: 50%; overflow: hidden; cursor: pointer; flex-shrink: 0; }
-.avatar-img { width: 100%; height: 100%; object-fit: cover; }
-.avatar-initials { width: 100%; height: 100%; background: var(--blue); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.5rem; }
-.avatar-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; opacity: 0; transition: .2s; }
-.account-avatar:hover .avatar-overlay { opacity: 1; }
-.account-name { font-weight: 700; font-size: 1.05rem; margin-bottom: 4px; }
-.account-email { font-size: .82rem; color: var(--w40); margin-bottom: 8px; }
-.account-role { display: inline-flex; }
-
-/* Password field */
-.password-field { position: relative; }
-.password-field .form-input { padding-right: 44px; }
-.pwd-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 1rem; }
+/* Logo URL Preview */
+.logo-url-preview {
+  margin-top: 10px;
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--w12);
+}
+.logo-url-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
 /* Modal */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.8); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }

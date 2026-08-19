@@ -1,65 +1,61 @@
 <template>
   <div class="culture-detail-view">
-    <TheNavbar />
-
-    <!-- Hero / Header Section -->
-    <header class="culture-hero" v-if="culture">
-      <!-- Background Image -->
-      <div class="culture-hero__bg" :style="{ backgroundImage: `url('${mainImage}')` }"></div>
-      <div class="culture-hero__overlay"></div>
-
-      <div class="container culture-hero__content">
-        <RouterLink to="/" class="btn-back">← Back to Home</RouterLink>
-        <h1 class="font-display culture-title">{{ culture.name }}</h1>
-        <div class="culture-meta">
-          <span class="meta-item">📍 {{ culture.location || 'West Lombok' }}</span>
-          <span class="meta-item" v-if="culture.event_date">📅 Date: {{ culture.event_date }}</span>
-          <span class="meta-item" v-if="culture.event_frequency">⏳ Frequency: {{ culture.event_frequency }}</span>
-        </div>
-      </div>
-    </header>
-
-    <!-- Main Content Section -->
-    <main class="container section" v-if="culture">
-      <div class="culture-content-layout">
-        
-        <!-- Left: Description & Info -->
-        <div class="culture-main-info">
-          <h2>About this Culture</h2>
-          <div class="culture-description">
-            <p v-if="culture.description">{{ culture.description }}</p>
-            <p v-else class="text-w40">No description available for this cultural heritage.</p>
-          </div>
-        </div>
-
-        <!-- Right: Gallery -->
-        <aside class="culture-gallery" v-if="allImages.length > 0">
-          <h3>Gallery</h3>
-          <div class="gallery-grid">
-            <img 
-              v-for="(img, idx) in allImages" 
-              :key="idx" 
-              :src="getPhotoUrl(img)" 
-              :alt="`Gallery ${idx+1}`" 
-              class="gallery-img" 
-              @click="openModal(img)"
-            />
-          </div>
-        </aside>
-
-      </div>
-    </main>
-
-    <!-- Image Modal -->
-    <div class="image-modal" v-if="selectedImage" @click="closeModal">
-      <button class="image-modal__close" @click.stop="closeModal">×</button>
-      <img :src="selectedImage" alt="Enlarged gallery view" class="image-modal__img" @click.stop />
-    </div>
 
     <!-- Loading State -->
-    <div class="container section loading-state" v-else-if="loading">
+    <div class="container section loading-state" v-if="loading">
       <p>Loading cultural heritage details...</p>
     </div>
+
+    <!-- Success State -->
+    <template v-else-if="culture">
+      <!-- Hero / Header Section -->
+      <header class="culture-hero">
+        <!-- Background Image -->
+        <div class="culture-hero__bg" :style="{ backgroundImage: `url('${mainImage}')` }"></div>
+        <div class="culture-hero__overlay"></div>
+
+        <div class="container culture-hero__content">
+          <RouterLink to="/" class="btn-back">← Back to Home</RouterLink>
+          <h1 class="font-display culture-title">{{ culture.name }}</h1>
+          <div class="culture-meta">
+            <span class="meta-item">📍 {{ culture.location || 'West Lombok' }}</span>
+            <span class="meta-item" v-if="culture.event_date">📅 Date: {{ culture.event_date }}</span>
+            <span class="meta-item" v-if="culture.event_frequency">⏳ Frequency: {{ culture.event_frequency }}</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main Content Section -->
+      <main class="container section">
+        <div class="culture-content-layout">
+          
+          <!-- Left: Description & Info -->
+          <div class="culture-main-info">
+            <h2>About this Culture</h2>
+            <div class="culture-description">
+              <p v-if="culture.description">{{ culture.description }}</p>
+              <p v-else class="text-w40">No description available for this cultural heritage.</p>
+            </div>
+          </div>
+
+          <!-- Right: Gallery -->
+          <aside class="culture-gallery" v-if="allImages.length > 0">
+            <h3>Gallery</h3>
+            <div class="gallery-grid">
+              <img 
+                v-for="(img, idx) in allImages" 
+                :key="idx" 
+                :src="getPhotoUrl(img)" 
+                :alt="`Gallery ${idx+1}`" 
+                class="gallery-img" 
+                @click="openModal(img)"
+              />
+            </div>
+          </aside>
+
+        </div>
+      </main>
+    </template>
 
     <!-- Error State -->
     <div class="container section error-state" v-else>
@@ -68,7 +64,11 @@
       <RouterLink to="/" class="btn btn-primary mt-4">Return Home</RouterLink>
     </div>
 
-    <TheFooter />
+    <!-- Image Modal -->
+    <div class="image-modal" v-if="selectedImage" @click="closeModal">
+      <button class="image-modal__close" @click.stop="closeModal">×</button>
+      <img :src="selectedImage" alt="Enlarged gallery view" class="image-modal__img" @click.stop />
+    </div>
   </div>
 </template>
 
@@ -77,8 +77,6 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { cultureApi } from '@/api'
 import type { Culture } from '@/types'
-import TheNavbar from '@/components/layout/TheNavbar.vue'
-import TheFooter from '@/components/layout/TheFooter.vue'
 
 const route = useRoute()
 const culture = ref<Culture | null>(null)

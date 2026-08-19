@@ -75,6 +75,7 @@ const currentPageTitle = computed(() => {
     '/admin': 'Dashboard', 
     '/admin/destinations': 'Destinations',
     '/admin/packages': 'Tour Packages', 
+    '/admin/homestays': 'Homestays',
     '/admin/vehicle-rentals': 'Vehicle Rentals',
     '/admin/culture': 'Culture & Heritage',
     '/admin/culinary': 'Local Culinary', 
@@ -95,6 +96,7 @@ const navGroups = [
   { title: 'Content', items: [
     { to: '/admin/destinations', icon: '🏝️', label: 'Destinations' },
     { to: '/admin/packages', icon: '📦', label: 'Tour Packages' },
+    { to: '/admin/homestays', icon: '🏠', label: 'Homestays' },
     { to: '/admin/vehicle-rentals', icon: '🚗', label: 'Vehicle Rentals' },
     { to: '/admin/culture', icon: '🎭', label: 'Culture & Heritage' },
     { to: '/admin/culinary', icon: '🍲', label: 'Local Culinary' },

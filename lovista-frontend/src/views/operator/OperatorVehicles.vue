@@ -125,17 +125,18 @@
           <button class="btn-close" @click="closeModal">×</button>
         </div>
         <form @submit.prevent="handleSubmit" class="modal-form">
-          <!-- Image Upload -->
-          <div class="image-upload-area" @click="triggerFileInput" @dragover.prevent @drop.prevent="handleDrop">
-            <input type="file" ref="fileInput" accept="image/*" class="hidden-input" @change="handleFileChange" />
-            <div v-if="imagePreview" class="image-preview-wrap">
-              <img :src="imagePreview" class="image-preview" />
-              <button type="button" class="img-remove-btn" @click.stop="clearImage">×</button>
-            </div>
-            <div v-else class="upload-placeholder">
-              <span>🚗</span>
-              <p>Click or drag to upload vehicle photo</p>
-              <small>JPG, PNG, WEBP up to 5MB</small>
+          <!-- Image URL -->
+          <div class="form-group full-width">
+            <label class="form-label">Photo URL</label>
+            <input
+              v-model="form.image"
+              type="url"
+              class="form-input"
+              placeholder="https://example.com/photo.jpg"
+              @input="imagePreview = form.image || null"
+            />
+            <div v-if="imagePreview" class="image-url-preview">
+              <img :src="imagePreview" @error="imagePreview = null" alt="Preview" />
             </div>
           </div>
 
@@ -246,9 +247,7 @@ const showDeleteModal = ref(false)
 const isEditing = ref(false)
 const currentId = ref<number | null>(null)
 const deleteTarget = ref<Vehicle | null>(null)
-const fileInput = ref<HTMLInputElement | null>(null)
 const imagePreview = ref<string | null>(null)
-const imageFile = ref<File | null>(null)
 const featuresInput = ref('')
 
 const vehicles = ref<Vehicle[]>([])
@@ -267,6 +266,7 @@ const form = ref({
   capacity: null as number | null,
   daily_rate: 0,
   driver_rate: 0,
+  image: '',
   is_available: true,
   is_active: true,
 })
@@ -311,12 +311,12 @@ function openEditModal(v: Vehicle) {
     capacity: v.capacity,
     daily_rate: Number(v.daily_rate),
     driver_rate: Number(v.driver_rate),
+    image: v.image || '',
     is_available: v.is_available,
     is_active: v.is_active,
   }
   featuresInput.value = v.features ? v.features.join(', ') : ''
-  imagePreview.value = v.image ? getPhotoUrl(v.image) : null
-  imageFile.value = null
+  imagePreview.value = v.image || null
   showModal.value = true
 }
 
@@ -329,36 +329,10 @@ function resetForm() {
   form.value = {
     type: '', brand: '', model: '', year: null,
     plate_number: '', capacity: null, daily_rate: 0,
-    driver_rate: 0, is_available: true, is_active: true,
+    driver_rate: 0, image: '', is_available: true, is_active: true,
   }
   featuresInput.value = ''
   imagePreview.value = null
-  imageFile.value = null
-}
-
-function triggerFileInput() { fileInput.value?.click() }
-
-function handleFileChange(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) setImageFile(file)
-}
-
-function handleDrop(e: DragEvent) {
-  const file = e.dataTransfer?.files?.[0]
-  if (file && file.type.startsWith('image/')) setImageFile(file)
-}
-
-function setImageFile(file: File) {
-  imageFile.value = file
-  const reader = new FileReader()
-  reader.onload = (e) => { imagePreview.value = e.target?.result as string }
-  reader.readAsDataURL(file)
-}
-
-function clearImage() {
-  imagePreview.value = null
-  imageFile.value = null
-  if (fileInput.value) fileInput.value.value = ''
 }
 
 async function handleSubmit() {
@@ -368,27 +342,12 @@ async function handleSubmit() {
     const payload: any = { ...form.value, features }
     if (!payload.year) delete payload.year
     if (!payload.capacity) delete payload.capacity
+    if (!payload.image) delete payload.image
 
-    if (imageFile.value) {
-      const fd = new FormData()
-      Object.entries(payload).forEach(([k, v]) => {
-        if (v !== null && v !== undefined) {
-          if (Array.isArray(v)) fd.append(k, JSON.stringify(v))
-          else fd.append(k, String(v))
-        }
-      })
-      fd.append('image', imageFile.value)
-      if (isEditing.value && currentId.value) {
-        await vehicleApi.update(currentId.value, fd as any)
-      } else {
-        await vehicleApi.create(fd as any)
-      }
+    if (isEditing.value && currentId.value) {
+      await vehicleApi.update(currentId.value, payload)
     } else {
-      if (isEditing.value && currentId.value) {
-        await vehicleApi.update(currentId.value, payload)
-      } else {
-        await vehicleApi.create(payload)
-      }
+      await vehicleApi.create(payload)
     }
 
     showModal.value = false
@@ -468,17 +427,19 @@ onMounted(fetchData)
 .pagination { display: flex; align-items: center; justify-content: center; gap: 16px; font-size: 0.9rem; color: var(--w70); }
 .mt-4 { margin-top: 24px; }
 
-.image-upload-area {
-  width: 100%; min-height: 160px; border: 2px dashed var(--w15); border-radius: 12px;
-  display: flex; align-items: center; justify-content: center; cursor: pointer;
-  transition: all .2s; margin-bottom: 24px; position: relative; overflow: hidden;
+.image-url-preview {
+  margin-top: 12px;
+  width: 100%;
+  height: 180px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--w12);
 }
-.image-upload-area:hover { border-color: var(--blue); background: rgba(26,143,255,.05); }
-.hidden-input { display: none; }
-.upload-placeholder { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--w40); text-align: center; padding: 24px; font-size: .9rem; }
-.image-preview-wrap { width: 100%; height: 160px; position: relative; }
-.image-preview { width: 100%; height: 100%; object-fit: cover; }
-.img-remove-btn { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; background: rgba(0,0,0,.7); border: none; border-radius: 50%; color: #fff; font-size: 1rem; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.image-url-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
 .toggle-group { display: flex; gap: 24px; margin-top: 8px; }
 .toggle-label { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: .9rem; color: var(--w70); }

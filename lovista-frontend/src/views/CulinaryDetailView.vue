@@ -1,6 +1,5 @@
 <template>
   <div class="culinary-detail-view">
-    <TheNavbar />
 
     <!-- Hero Section -->
     <header class="culinary-hero" v-if="culinary">

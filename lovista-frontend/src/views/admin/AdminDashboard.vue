@@ -103,7 +103,8 @@ const statCards = computed(() => {
     { icon: '🏝️', label: 'Total Destinations', value: stats.value.total_destinations, link: '/admin/destinations' },
     { icon: '👥', label: 'Total Users', value: stats.value.total_users, link: '/admin/users' },
     { icon: '📅', label: 'Total Bookings', value: stats.value.total_bookings, link: '/admin/bookings' },
-    { icon: '🚗', label: 'Total Vehicles', value: stats.value.total_vehicles, link: '/admin/rent' },
+    { icon: '🚗', label: 'Total Vehicles', value: stats.value.total_vehicles, link: '/admin/vehicle-rentals' },
+    { icon: '🏠', label: 'Total Homestays', value: stats.value.total_homestays, link: '/admin/homestays' },
     { icon: '💰', label: 'Total Revenue', value: `Rp ${stats.value.total_revenue.toLocaleString('id-ID')}`, link: '/admin/bookings' },
     { icon: '⏳', label: 'Pending Contributions', value: stats.value.pending_contributions, link: '/admin/contributions' },
     { icon: '🏢', label: 'Active Operators', value: stats.value.active_operators, link: '/admin/operators' },
@@ -144,7 +145,7 @@ async function refreshAll() {
       // Fallback stats to stop loading loop
       stats.value = stats.value || {
         total_destinations: 0, total_users: 0, total_bookings: 0,
-        total_revenue: 0, pending_contributions: 0, active_operators: 0
+        total_revenue: 0, pending_contributions: 0, active_operators: 0, total_vehicles: 0, total_homestays: 0
       }
     }
     

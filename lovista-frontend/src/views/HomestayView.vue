@@ -66,7 +66,7 @@
                   
                   <div class="product-card__footer">
                     <div class="price-wrap">
-                      <span class="price val">Rp {{ formatNumber((item as any).price_per_night || 0) }}<span style="font-size: 0.7rem; font-weight: normal; color: var(--w40)">/night</span></span>
+                      <span class="price val">Rp {{ formatNumber((item as any).starting_price || 0) }}<span style="font-size: 0.7rem; font-weight: normal; color: var(--w40)">/night</span></span>
                     </div>
                     <div class="actions">
                       <button class="icon-btn" title="View Details">→</button>

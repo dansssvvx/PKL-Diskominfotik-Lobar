@@ -1,6 +1,5 @@
 <template>
   <div class="vehicle-detail-view">
-    <TheNavbar />
 
     <!-- Hero Section -->
     <header class="vehicle-hero" v-if="vehicle">
@@ -217,8 +216,6 @@
         </div>
       </div>
     </div>
-
-    <TheFooter />
   </div>
 </template>
 

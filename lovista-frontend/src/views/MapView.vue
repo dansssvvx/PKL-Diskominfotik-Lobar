@@ -1,6 +1,5 @@
 <template>
   <div class="page-wrapper">
-    <TheNavbar />
     
     <div class="map-container">
       <div class="map-sidebar" :class="{ 'is-open': sidebarOpen }">
